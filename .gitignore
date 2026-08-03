@@ -1,0 +1,28 @@
+# --- System & IDE ---
+.ipynb_checkpoints/
+**/__pycache__/
+*.py[cod]
+.vscode/
+.env
+.DS_Store
+
+# --- Project Specific ---
+Projects/
+.ssh/
+*.pid
+*.out
+*.log
+
+# --- Data --- 
+data/*
+ 
+
+# --- Python Build & Distribution ---
+build/
+dist/
+*.egg-info/
+__pycache__/
+
+# --- Colab Specific ---
+/content/drive
+drive/
