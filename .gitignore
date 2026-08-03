@@ -17,6 +17,9 @@ Projects/
 data/*
  
 
+# --- Notebooks --- 
+notebooks/quant_dev.ipynb  
+
 # --- Python Build & Distribution ---
 build/
 dist/
