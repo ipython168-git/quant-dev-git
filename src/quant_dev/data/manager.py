@@ -215,7 +215,10 @@ class DataManager:
         """ 
         # 標準格式：第一欄係 Date
         df = pd.read_csv(file_path, index_col=0, parse_dates=True)
-        return df
+        # ✅ 確保 index name 係 'Date'
+        if df.index.name is None:
+            df.index.name = 'Date'
+        return df 
 
 
     def _save_csv(self, df: pd.DataFrame, file_path: Path) -> None:

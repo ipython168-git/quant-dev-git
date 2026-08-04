@@ -11,6 +11,21 @@ requires-python = ">=3.12"
 
 # 預留基礎依賴項，有需要可自行追加
 dependencies = [ 
+    "pandas>=1.5.0",
+    "numpy>=1.23.0",
+    "yfinance>=0.2.0",
+    "pytz>=2022.0",
+]
+
+# 選擇性依賴 (Optional Dependencies)
+[project.optional-dependencies]
+# 開發用：測試、Linting、格式化
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
 ]
 
 [tool.setuptools]
