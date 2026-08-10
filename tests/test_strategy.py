@@ -1,140 +1,302 @@
 # tests/test_strategy.py
 """
-單元測試：Strategy 回測引擎
+單元測試：Strategy 回測引擎 (CV 版)
+專為 quant-dev 精簡版 Strategy 設計
 """
 import pytest
 import pandas as pd
 import numpy as np
-from src.quant_dev.backtest.strategy import Strategy, StrategyConfig
+from src.quant_dev.backtest.strategy import Strategy, StrategyOption
 
 
-@pytest.fixture
-def sample_data():
-    """建立模擬數據"""
-    dates = pd.date_range(start="2024-01-01", periods=20, freq="D")
+# ============================================================
+# 測試輔助函數
+# ============================================================
+
+def _make_test_data(
+    opens: list, highs: list, lows: list, closes: list,
+    signals_b: list = None, signals_s: list = None,
+    entry_prices: list = None, exit_prices: list = None
+) -> pd.DataFrame:
+    """建立測試用 OHLC DataFrame + 必要 columns"""
+    n = len(opens)
     df = pd.DataFrame({
-        "Open": np.linspace(100, 119, 20) + np.random.randn(20) * 0.5,
-        "High": np.linspace(102, 121, 20) + np.random.randn(20) * 0.5,
-        "Low": np.linspace(98, 117, 20) + np.random.randn(20) * 0.5,
-        "Close": np.linspace(101, 120, 20) + np.random.randn(20) * 0.5,
-        "Volume": np.random.randint(1000, 10000, 20)
-    }, index=dates)
+        "Open": opens,
+        "High": highs,
+        "Low": lows,
+        "Close": closes,
+        "Volume": [1000] * n,
+    })
+    
+    # 如果冇提供 signal，預設全部 False
+    if signals_b is None:
+        signals_b = [False] * n
+    if signals_s is None:
+        signals_s = [False] * n
+    if entry_prices is None:
+        entry_prices = [np.nan] * n
+    if exit_prices is None:
+        exit_prices = [np.nan] * n
+    
+    df["signal_b"] = signals_b
+    df["signal_s"] = signals_s
+    df["entry_price"] = entry_prices
+    df["exit_price"] = exit_prices
+    
     return df
 
 
-@pytest.fixture
-def sample_signal(sample_data):
-    """建立模擬信號：第5日買入，第15日賣出"""
-    signal = pd.Series(0, index=sample_data.index)
-    signal.iloc[5] = 1   # 第5日買入
-    signal.iloc[15] = -1 # 第15日賣出
-    return signal
+def _create_strategy(df, **kwargs) -> Strategy:
+    """建立 Strategy 實例"""
+    option = StrategyOption(
+        ticker="TEST",
+        direction=kwargs.get("direction", "buy"),
+        entry_order_type=kwargs.get("entry_order_type", "stop"),
+        exit_order_type=kwargs.get("exit_order_type", "stop"),
+        gap_entry=kwargs.get("gap_entry", "open"),
+        gap_exit=kwargs.get("gap_exit", "open"),
+        market_tz="America/New_York",
+        timeframe="1d",
+        df=df,
+    )
+    # 使用用戶傳入嘅 df（已包含 signal_b, signal_s, entry_price, exit_price）
+    return Strategy(option)
 
+
+# ============================================================
+# 測試 Cases
+# ============================================================
 
 class TestStrategy:
-    """Strategy 單元測試"""
+    """Strategy 核心功能測試"""
 
-    def test_initialization(self, sample_data):
-        """測試：Strategy 能正確初始化"""
-        config = StrategyConfig(ticker="TEST")
-        strat = Strategy(config, sample_data)
-        assert strat.df is not None
-        assert "position" in strat.df.columns
-        assert "entry" in strat.df.columns
-        assert "exit" in strat.df.columns
-
-    def test_add_signal(self, sample_data, sample_signal):
-        """測試：add_signal 能正確加入信號"""
-        config = StrategyConfig(ticker="TEST")
-        strat = Strategy(config, sample_data)
-        strat.add_signal(sample_signal)
-        
-        # 檢查 signal column 存在同長度正確
-        assert "signal" in strat.df.columns
-        assert len(strat.df["signal"]) == len(sample_data)
-        # 檢查信號值
-        assert strat.df["signal"].iloc[5] == 1
-        assert strat.df["signal"].iloc[15] == -1
-
-    def test_set_entry_exit_price(self, sample_data, sample_signal):
-        """測試：set_entry_price / set_exit_price 能正確設定"""
-        config = StrategyConfig(ticker="TEST")
-        strat = Strategy(config, sample_data)
-        strat.add_signal(sample_signal)
-        
-        # 用 High 做入市目標，Low 做出市目標
-        strat.set_entry_price(sample_data["High"].shift(1))
-        strat.set_exit_price(sample_data["Low"].shift(1))
-        
-        assert "entry_price" in strat.df.columns
-        assert "exit_price" in strat.df.columns
-        # 檢查 entry_price 係咪 High.shift(1)
-        pd.testing.assert_series_equal(
-            strat.df["entry_price"], 
-            sample_data["High"].shift(1),
-            check_names=False
+    def test_buy_stop_normal(self):
+        """Buy stop: 升穿 target 入市"""
+        df = _make_test_data(
+            opens=[100, 101, 102],
+            highs=[102, 106, 107],
+            lows=[99, 100, 101],
+            closes=[97, 105, 106],
+            signals_b=[False, True, False],
+            entry_prices=[np.nan, 104, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
         )
-
-    def test_run_basic(self, sample_data, sample_signal):
-        """測試：run() 能正確執行基本回測"""
-        config = StrategyConfig(
-            ticker="TEST",
-            direction="buy",
-            mode="normal",
-            entry_order_type="market",
-            exit_order_type="market"
-        )
-        strat = Strategy(config, sample_data)
-        strat.add_signal(sample_signal)
-        strat.set_entry_price(sample_data["Open"])
-        strat.set_exit_price(sample_data["Open"])
+        strat = _create_strategy(df, direction="buy", entry_order_type="stop", gap_entry="open")
         strat.run()
         
-        # 檢查 position 有變化
-        assert "position" in strat.df.columns
-        assert strat.df["position"].sum() != 0  # 有交易發生
-        
-        # 檢查 entry 有值（第5日應該入市）
-        assert not pd.isna(strat.df["entry"].iloc[5])
-        
-        # 檢查 exit 有值（第15日應該出市）
-        assert not pd.isna(strat.df["exit"].iloc[15])
-
-    def test_run_strong_hold(self, sample_data):
-        """測試：Strong Hold 模式"""
-        config = StrategyConfig(
-            ticker="TEST",
-            direction="buy",
-            mode="strong_hold"
-        )
-        strat = Strategy(config, sample_data)
-        # Strong Hold 唔需要 signal
-        strat.run()
-        
-        # 檢查：第一日應該入市，最後一日應該平倉
-        assert strat.df["position"].iloc[0] == 1
+        # Bar 1: high=106 >= 104 → stop buy at -104
+        assert strat.df["entry"].iloc[1] == -104.0
+        assert strat.df["position"].iloc[1] == 1
+        # 最後一日強制平倉
         assert strat.df["position"].iloc[-1] == 0
-        assert not pd.isna(strat.df["entry"].iloc[0])
-        assert not pd.isna(strat.df["exit"].iloc[-1])
 
-    def test_run_eac_mode(self, sample_data, sample_signal):
-        """測試：Exit-at-Close 模式"""
-        config = StrategyConfig(
-            ticker="TEST",
-            direction="buy",
-            mode="exit_at_close",
-            entry_order_type="market",
-            exit_order_type="market"
+    def test_buy_limit_fill_at_open(self):
+        """Buy limit: 開市已到 target → 用開市價成交"""
+        df = _make_test_data(
+            opens=[102, 98, 101],
+            highs=[103, 102, 102],
+            lows=[101, 97, 100],
+            closes=[101, 101, 102],
+            signals_b=[False, True, False],
+            entry_prices=[np.nan, 100, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
         )
-        strat = Strategy(config, sample_data)
-        strat.add_signal(sample_signal)
-        strat.set_entry_price(sample_data["Open"])
-        strat.set_exit_price(sample_data["Open"])
+        strat = _create_strategy(df, direction="buy", entry_order_type="limit", gap_entry="open")
         strat.run()
         
-        # 檢查：有信號嗰日應該 entry = open，exit = close（同日平倉）
-        if not pd.isna(strat.df["entry"].iloc[5]):
-            # 如果第5日有入市，應該同日平倉
-            assert not pd.isna(strat.df["exit"].iloc[5])
-            # exit 應該等於 close（你嘅 logic 係用 close 平倉）
-            assert strat.df["exit"].iloc[5] == strat.df["Close"].iloc[5]
+        # Bar 1: open=98 <= 100 → limit buy at -98
+        assert strat.df["entry"].iloc[1] == -98.0
+        assert strat.df["position"].iloc[1] == 1
+
+    def test_sell_stop_normal(self):
+        """Sell stop: 跌穿 target 入市（沽空）"""
+        df = _make_test_data(
+            opens=[105, 104, 103],
+            highs=[106, 105, 104],
+            lows=[104, 99, 102],
+            closes=[106, 100, 103],
+            signals_b=[False, False, False],
+            signals_s=[False, True, False],
+            entry_prices=[np.nan, 101, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="sell", entry_order_type="stop", gap_entry="open")
+        strat.run()
+        
+        # Bar 1: low=99 <= 101 → stop sell at +101
+        assert strat.df["entry"].iloc[1] == 101.0
+        assert strat.df["position"].iloc[1] == -1
+
+    def test_exit_signal_after_entry(self):
+        """入市後，sell signal 觸發出市"""
+        df = _make_test_data(
+            opens=[100, 101, 102, 103],
+            highs=[102, 106, 107, 108],
+            lows=[99, 100, 101, 102],
+            closes=[101, 104, 105, 107],
+            signals_b=[False, True, False, False],
+            signals_s=[False, False, True, False],
+            entry_prices=[np.nan, 102, np.nan, np.nan],
+            exit_prices=[np.nan, np.nan, 106, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy", entry_order_type="stop", exit_order_type="stop")
+        strat.run()
+        
+        # Bar 1: 入市
+        assert strat.df["entry"].iloc[1] == -102.0
+        assert strat.df["position"].iloc[1] == 1
+        # Bar 2: 出市
+        assert strat.df["exit"].iloc[2] == 102.0  # open=102 <= 106 → gap open
+        assert strat.df["position"].iloc[2] == 0
+
+    def test_gap_give_up(self):
+        """gap_entry='give_up': 開市已突破 target → 放棄交易"""
+        df = _make_test_data(
+            opens=[100, 106, 102],
+            highs=[105, 107, 103],
+            lows=[99, 104, 101],
+            closes=[104, 106, 102],
+            signals_b=[False, True, False],
+            entry_prices=[np.nan, 105, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy", entry_order_type="stop", gap_entry="give_up")
+        strat.run()
+        
+        # Bar 1: open=106 >= 105，但 give_up → 唔成交
+        assert pd.isna(strat.df["entry"].iloc[1])
+        assert strat.df["position"].iloc[1] == 0
+
+    def test_gap_wait_close(self):
+        """gap_entry='wait_close': 開市突破 target，等到收市決定"""
+        df = _make_test_data(
+            opens=[100, 106, 102],
+            highs=[103, 107, 103],
+            lows=[99, 104, 101],
+            closes=[102, 106, 102],
+            signals_b=[False, True, False],
+            entry_prices=[np.nan, 105, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy", entry_order_type="stop", gap_entry="wait_close")
+        strat.run()
+        
+        # Bar 1: open=106 >= 105，wait_close → low=104 <= 105 → 用 target -105
+        assert strat.df["entry"].iloc[1] == -105.0
+
+    def test_gap_wait_give_up(self):
+        """gap_entry='wait_give_up': 等到收市，如果冇觸發就放棄"""
+        df = _make_test_data(
+            opens=[100, 108, 102],
+            highs=[105, 109, 103],
+            lows=[99, 107, 101],
+            closes=[104, 108, 102],
+            signals_b=[False, True, False],
+            entry_prices=[np.nan, 106, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy", entry_order_type="stop", gap_entry="wait_give_up")
+        strat.run()
+        
+        # Bar 1: open=108 >= 106，但 low=107 > 106 → 冇觸發 → 放棄
+        assert pd.isna(strat.df["entry"].iloc[1])
+
+    def test_market_order(self):
+        """Market order: 直接用開市價成交"""
+        df = _make_test_data(
+            opens=[100, 102, 104],
+            highs=[102, 104, 106],
+            lows=[98, 100, 102],
+            closes=[99, 103, 105],
+            signals_b=[False, True, False],
+            entry_prices=[np.nan, 999, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy", entry_order_type="market")
+        strat.run()
+        
+        # Bar 1: market → 用開市價 -102
+        assert strat.df["entry"].iloc[1] == -102.0
+
+    def test_last_day_force_close_long(self):
+        """最後一日仍持好倉 → 強制用 close 平倉"""
+        df = _make_test_data(
+            opens=[100, 101, 102],
+            highs=[102, 105, 104],
+            lows=[99, 100, 101],
+            closes=[101, 102, 105],
+            signals_b=[False, True, False],
+            entry_prices=[np.nan, 100, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy", entry_order_type="stop")
+        strat.run()
+        
+        # 最後一日（bar 2）強制平倉
+        assert strat.df["position"].iloc[-1] == 0
+        assert strat.df["exit"].iloc[-1] == 105.0
+
+    def test_last_day_force_close_short(self):
+        """最後一日仍持淡倉 → 強制用 close 平倉（負數）"""
+        df = _make_test_data(
+            opens=[103, 100, 102],
+            highs=[104, 103, 104],
+            lows=[101, 98, 101],
+            closes=[102, 102, 105],
+            signals_b=[False, False, False],
+            signals_s=[False, True, False],
+            entry_prices=[np.nan, 102, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="sell", entry_order_type="stop")
+        strat.run()
+        
+        # 最後一日（bar 2）強制平倉
+        assert strat.df["position"].iloc[-1] == 0
+        assert strat.df["exit"].iloc[-1] == -105.0
+
+    def test_no_signal_no_trade(self):
+        """冇信號 → 冇交易"""
+        df = _make_test_data(
+            opens=[100, 101, 102],
+            highs=[102, 103, 104],
+            lows=[99, 100, 101],
+            closes=[101, 102, 103],
+            signals_b=[False, False, False],
+            signals_s=[False, False, False],
+            entry_prices=[np.nan, np.nan, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy")
+        strat.run()
+        
+        assert (strat.df["position"] == 0).all()
+        assert strat.df["entry"].isna().all()
+        assert strat.df["exit"].isna().all()
+
+    def test_get_trade_log(self):
+        """get_trade_log() 正確提取交易記錄"""
+        df = _make_test_data(
+            opens=[100, 101, 102, 103, 104],
+            highs=[102, 106, 107, 108, 109],
+            lows=[99, 100, 101, 102, 103],
+            closes=[101, 105, 106, 107, 108],
+            signals_b=[False, True, False, False, False],
+            signals_s=[False, False, False, True, False],
+            entry_prices=[np.nan, 102, np.nan, np.nan, np.nan],
+            exit_prices=[np.nan, np.nan, np.nan, 107, np.nan],
+        )
+        strat = _create_strategy(df, direction="buy")
+        strat.run()
+        
+        log = strat.get_trade_log(rolling=0)
+        # 應該有 2 行（entry bar + exit bar）
+        assert len(log) == 2
+        
+        log2 = strat.get_trade_log(rolling=1)
+        # rolling=1 應該有 4 行（前後各 1 行）
+        assert len(log2) == 4
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

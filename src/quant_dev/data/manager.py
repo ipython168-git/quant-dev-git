@@ -274,7 +274,7 @@ class DataManager:
     def _normalize_daily_index(self, df: pd.DataFrame) -> pd.DataFrame:
         """日K → 純日期（timezone-naive）"""
         if not isinstance(df.index, pd.DatetimeIndex):
-            df.index = pd.to_datetime(df.index)
+            df.index = pd.to_datetime(df.index, utc=True)
 
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)

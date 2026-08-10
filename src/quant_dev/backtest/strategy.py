@@ -1,241 +1,456 @@
 # src/quant_dev/backtest/strategy.py
 """
 精簡版回測引擎 (Strategy)
-保留核心：Order Type, Gap Handling, 多模式 (Normal/EAC/Strong Hold)
-移除：YAML 設定、複雜的條件生成器
-only for swing trade
+保留核心：Order Type, Gap Handling for swing trade
 """
 import pandas as pd
 import numpy as np
-from typing import Optional, Dict, Any
-from dataclasses import dataclass, field
+from typing import Dict, Any, Optional 
+from dataclasses import dataclass 
+from ..data.manager import DataManager
 
-
+import logging
+logger = logging.getLogger(__name__) 
+# ================================================= #
+pd.set_option("display.max_columns", None)
+# ================================================= #
 @dataclass
-class StrategyConfig:
-    """策略配置（精簡版）"""
+class StrategyOption:
+    """策略配置"""
     ticker: str
-    direction: str = "buy"                  # "buy" 或 "sell"
-    mode: str = "normal"                    # "normal", "exit_at_close", "strong_hold"
-    entry_order_type: str = "stop"        # "market", "limit", "stop"
+    direction: str = "buy"              # "buy" / "sell"
+    entry_order_type: str = "stop"    # "market" / "limit" / "stop"
     exit_order_type: str = "stop"
-    gap_entry: str = "open"                 # "open", "close", "give_up", "wait_close"
+    gap_entry: str = "open"             # "open" / "close" / "give_up" / "wait_close" / "wait_give_up"
     gap_exit: str = "open"
-    initial_capital: float = 10000.0
+    market_tz: str = "America/New_York"
+    timeframe: str = "1d"
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    df: Optional[pd.DataFrame] = None
 
-
+# ================================================= #
 class Strategy:
-    """精簡版回測引擎"""
+    """
+    策略回測引擎
+    支援：
+    - Stop / Limit / Market Order 
+    - 統一 Gap Handling 
+    """
+# ------------------------------------------------- #
+    def __init__(self, option: StrategyOption):
+        """
+        初始化 Strategy
+        
+        Args:
+            option: StrategyOption 物件
+            data: 必須包含 Open, High, Low, Close 嘅 DataFrame
+                以及 signal_b, signal_s, entry_price, exit_price 4 個 columns
+        """
+        self.option = option 
+        self.ticker = option.ticker
+        self.direction = option.direction
+        self.entry_order_type = option.entry_order_type
+        self.exit_order_type = option.exit_order_type
+        self.gap_entry = option.gap_entry
+        self.gap_exit = option.gap_exit
+        self.mode = "normal"  # 只支援 normal mode
 
-    def __init__(self, config: StrategyConfig, data: pd.DataFrame):
-        self.config = config
-        self.df = data.copy()
-        self._validate_data()
-        self._init_columns()
+        if option.df is not None:
+            self.df = option.df.copy()
+        else:
+            # ===== DataManager 載入數據 ===== 
+            dm = DataManager(market_tz=self.option.market_tz)
+            self.df = dm.load_csv(
+                ticker=self.option.ticker,
+                timeframe=self.option.timeframe,
+                start_date=self.option.start_date,
+                end_date=self.option.end_date,
+            )
 
-    # ============================================================
-    # 用戶 API
-    # ============================================================
-    def add_signal(self, signal_series: pd.Series) -> None:
-        """加入交易信號：1=買入, -1=賣出, 0=觀望"""
-        if len(signal_series) != len(self.df):
-            raise ValueError("Signal 長度必須與數據一致")
-        self.df['signal'] = signal_series.values
+        self.length = len(self.df)
 
-    def set_entry_price(self, price_series: pd.Series) -> None:
-        """設定入市價（例如：df['High'].shift(1)）"""
-        if len(price_series) != len(self.df):
-            raise ValueError("Entry price 長度必須與數據一致")
-        self.df['entry_price'] = price_series.values
+        # 確保 df 有 required columns (OHLC)
+        self._check_ohlc() 
+        # 驗證策略參數
+        self._check_strategy_input()
 
-    def set_exit_price(self, price_series: pd.Series) -> None:
-        """設定出市價（例如：df['Low'].shift(1)）"""
-        if len(price_series) != len(self.df):
-            raise ValueError("Exit price 長度必須與數據一致")
-        self.df['exit_price'] = price_series.values
+        # 初始化結果 columns
+        self._init_columns() 
+# ================================================= #
+# Init Helpers
+# ================================================= #
+    def _check_ohlc(self):
+        if self.df.empty:
+            raise ValueError(f"輸入的{self.option.ticker} DataFrame 是空的")
+        if not {"Open", "High", "Low", "Close"}.issubset(self.df.columns):
+            raise ValueError('DataFrame必須包含"Open", "High", "Low", "Close"列') 
+# ------------------------------------------------- #
+    def _check_strategy_input(self):
+        if self.direction not in ["buy", "sell"]:
+            import textwrap
+            raise ValueError(textwrap.dedent(f"""
+                ❌ 參數錯誤 ❌
+                ==============
+                🔹 你輸入: {self.direction}
+                🔹 但 direction 要係:
+                - 'buy'  📈 (做多)
+                - 'sell' 📉 (做空)
+                """))
 
+        if any(x not in ["give_up", "open", "close", "wait_close", "wait_give_up"] 
+                for x in [self.gap_exit, self.gap_entry]):
+            import textwrap
+            raise ValueError(textwrap.dedent(f"""
+                ❌ 參數唔啱規矩啊老友！ ❌
+                ==========================
+                🌀 你輸入咗:
+                gap_exit = '{self.gap_exit}'
+                gap_entry = '{self.gap_entry}'
+                    
+                📜 但係我淨係接受以下選擇:
+                - 'give_up'      🙅‍♂️ 放棄交易
+                - 'open'         🚪 開倉
+                - 'close'        🔒 平倉
+                - 'wait_close'   ⏳ 等平倉
+                - 'wait_give_up' 💤 等放棄
+
+                💡 提示: 檢查吓係咪串錯字？
+                """)) 
+        return True
+# ------------------------------------------------- #
+    def _init_columns(self):
+        """初始化結果 columns"""
+        self.df["position"] = np.zeros(self.length, dtype=int)  # 持倉狀態
+        self.df["entry"] = np.full(self.length, np.nan)  # 買入價
+        self.df["exit"] = np.full(self.length, np.nan)  # 賣出價 
+
+# Public API — Run Strategy
+# ================================================= #
     def run(self) -> "Strategy":
         """執行回測"""
-        self._prepare_arrays()
-        self._simulate()
+        # ✅ 喺執行前檢查 4 個必要 columns (signal_b, signal_s, entry_price, exit_price)
+        self._check_required_columns()
+        
+        self._prepare_numpy_arrays()
+        self._simulate_trades()
         self._sync_to_dataframe()
         return self
-
- 
-    # ============================================================
-    # 內部方法 (保留你嘅核心邏輯)
-    # ============================================================
-    def _validate_data(self):
-        if not {"Open", "High", "Low", "Close"}.issubset(self.df.columns):
-            raise ValueError("DataFrame 必須包含 Open, High, Low, Close")
-
-    def _init_columns(self):
-        self.df["position"] = 0
-        self.df["entry"] = np.nan
-        self.df["exit"] = np.nan
-        self.df["signal"] = 0
-        if "entry_price" not in self.df.columns:
-            self.df["entry_price"] = np.nan
-        if "exit_price" not in self.df.columns:
-            self.df["exit_price"] = np.nan
-
-    def _prepare_arrays(self):
-        """將 DataFrame 轉為 NumPy Array 以加快速度"""
-        cols = ["Open", "High", "Low", "Close", "signal", "entry_price", "exit_price"]
-        for col in cols:
-            setattr(self, f"_np_{col}", self.df[col].to_numpy(dtype=float))
-        self._np_position = np.zeros(len(self.df), dtype=int)
-        self._np_entry = np.full(len(self.df), np.nan)
-        self._np_exit = np.full(len(self.df), np.nan)
-
-    # ============================================================
-    # 核心模擬循環 (保留你原設計)
-    # ============================================================
-    def _simulate(self):
-        """主模擬循環"""
-        n = len(self.df)
-        if self.config.mode == "strong_hold":
-            self._simulate_strong_hold()
-            return
-
-        start_i = 0 if self.config.mode == "exit_at_close" else 1
-        for i in range(start_i, n):
+# ================================================= #
+# Internal — Data Preparation
+# ================================================= #
+    def _check_required_columns(self):
+        """檢查用戶有冇提供必要嘅 4 個 columns"""
+        required = ['signal_b', 'signal_s', 'entry_price', 'exit_price']
+        missing = [c for c in required if c not in self.df.columns]
+        if missing:
+            raise ValueError(f"DataFrame 缺少必要 columns: {missing}")
+# ------------------------------------------------- #
+    def _prepare_numpy_arrays(self):
+        """將 DataFrame 轉為 numpy array"""
+        self.np_open = self.df["Open"].to_numpy(dtype=float)
+        self.np_high = self.df["High"].to_numpy(dtype=float)
+        self.np_low = self.df["Low"].to_numpy(dtype=float)
+        self.np_close = self.df["Close"].to_numpy(dtype=float)
+        self.np_signal_b = self.df["signal_b"].to_numpy(dtype=bool)
+        self.np_signal_s = self.df["signal_s"].to_numpy(dtype=bool)
+        self.np_entry_price = self.df["entry_price"].to_numpy(dtype=float)
+        self.np_exit_price = self.df["exit_price"].to_numpy(dtype=float)
+        
+        # 結果 arrays（將會被填充）
+        self.np_position = np.zeros(self.length, dtype=int)
+        self.np_entry = np.full(self.length, np.nan)
+        self.np_exit = np.full(self.length, np.nan) 
+        
+# ================================================= #
+# Internal — Trade Simulation (Core)
+# ================================================= #
+    def _simulate_trades(self):
+        """主模擬循環（只保留 normal mode）"""
+        # 從第 1 日開始（第 0 日冇前一日數據）
+        for i in range(1, self.length):
             self._process_bar(i)
-        self._close_position_on_last_day()
-
+        # 最後一日強制平倉
+        self._close_position_on_last_day()         
+# ------------------------------------------------- # 
+    def _sync_to_dataframe(self):
+        """將 numpy arrays 同步返 DataFrame"""
+        self.df["position"] = self.np_position
+        self.df["entry"] = self.np_entry
+        self.df["exit"] = self.np_exit
+# ------------------------------------------------- # 
     def _process_bar(self, i: int):
-        """處理單一 K 線"""
-        prev_pos = self._np_position[i-1] if i > 0 else 0
-        signal = self._np_signal[i]
-
-        if self.config.mode == "exit_at_close":
-            self._process_eac_bar(i, prev_pos, signal)
-            return
-
-        # Normal mode
+        """
+        處理單一 K 線 
+        - normal: 正常 entry/exit 
+        """
+        prev_pos = self.np_position[i - 1]
+        """Normal mode: 持倉跟隨信號"""
         if prev_pos == 0:
-            self._try_entry(i, signal)
+            self._try_entry(i)
         elif prev_pos == 1:
-            self._try_exit(i, signal, "buy")
+            self._try_exit(i, "buy")
         elif prev_pos == -1:
-            self._try_exit(i, signal, "sell")
+            self._try_exit(i, "sell") 
+# ------------------------------------------------- #  
+    def _close_position_on_last_day(self):
+        # 處理最後一日仍持倉嘅情況  
+        if self.np_position[-1] == 0:
+            return  # 冇持倉，唔使做
 
-    # ============================================================
-    # Entry / Exit 邏輯 (保留你原設計)
-    # ============================================================
-    def _try_entry(self, i: int, signal: int):
+        # 搵最後一個有效 close price
+        close_to_use = self.np_close[-1]
+        if np.isnan(close_to_use):
+            # Fallback: 由尾向前搵第一個 non-NaN close
+            for j in range(len(self.np_close) - 2, -1, -1):
+                if not np.isnan(self.np_close[j]):
+                    close_to_use = self.np_close[j]
+                    break 
+        if np.isnan(close_to_use):
+            logger.error("❗️ 完全冇 close data, 請檢查下載的 csv")
+            return  
+
+        if self.np_position[-1] == 1:  # 如果最後持好倉 
+            self.np_position[-1] = 0  # 強制平倉
+            if np.isnan(self.np_exit[-1]):
+                self.np_exit[-1] = close_to_use  # 用收市價平倉  
+        elif self.np_position[-1] == -1:  # 如果最後持淡倉  
+            self.np_position[-1] = 0  # 強制平倉
+            if np.isnan(self.np_exit[-1]):
+                self.np_exit[-1] = -close_to_use  # 用收市價平倉 (注意負號)
+ 
+        return
+# ------------------------------------------------- #
+# ================================================= #
+# Entry / Exit Logic
+# ================================================= #
+    def _try_entry(self, i: int):
         """嘗試入場"""
-        if signal == 0:
-            return
-        if self.config.direction == "buy" and signal != 1:
-            return
-        if self.config.direction == "sell" and signal != -1:
-            return
+        if self.direction == "buy" and self._has_signal(i, "buy"):
+            price = self._get_order_price(i, "entry", "buy", self.np_entry_price[i], self.entry_order_type)
+            if price is not None:
+                self.np_position[i] = 1
+                self.np_entry[i] = price
+                return
 
-        price = self._get_order_price(i, "entry", signal, self._np_entry_price[i])
-        if price is not None:
-            self._np_position[i] = signal
-            self._np_entry[i] = price
+        elif self.direction == "sell" and self._has_signal(i, "sell"):
+            price = self._get_order_price(i, "entry", "sell", self.np_entry_price[i], self.entry_order_type)
+            if price is not None:
+                self.np_position[i] = -1
+                self.np_entry[i] = price
+                return
+    # ------------------------------------------------- #
+    def _try_exit(self, i: int, holding_direction: str):
+        """嘗試出場。holding_direction: 'buy' (好倉) 或 'sell' (淡倉)"""
+        if holding_direction == "buy":
+            # 平好倉 = 沽貨 → 用 'sell' direction 去做 stop/limit 判斷
+            if self._has_signal(i, "sell"):
+                price = self._get_order_price(
+                    i, "exit", "sell",           # ← direction='sell'
+                    self.np_exit_price[i],
+                    self.exit_order_type
+                )
+                if price is not None:
+                    self.np_position[i] = 0
+                    self.np_exit[i] = abs(price)  # 沽貨收錢，強制正數
+                    return
+            self.np_position[i] = 1  # 保持好倉
+        else:
+            # 平淡倉 = 買貨 → 用 'buy' direction
+            if self._has_signal(i, "buy"):
+                price = self._get_order_price(
+                    i, "exit", "buy",            # ← direction='buy'
+                    self.np_exit_price[i],
+                    self.exit_order_type
+                )
+                if price is not None:
+                    self.np_position[i] = 0
+                    self.np_exit[i] = -abs(price)  # 買貨俾錢，強制負數
+                    return
+            self.np_position[i] = -1  # 保持淡倉
+# ------------------------------------------------- #
+# ================================================= #
+# Internal — Signal Check
+# ================================================= #
+    def _has_signal(self, i: int, signal_type: str) -> bool:
+        """檢查有冇信號"""
+        if signal_type == "buy":
+            return bool(self.np_signal_b[i])
+        else:  # "sell"
+            return bool(self.np_signal_s[i])
+# ------------------------------------------------- #
+# ================================================= #
+# Internal — Order Type Logic
+# ================================================= #
+    def _get_order_price(
+            self, i: int, action: str, direction: str,
+            target: float, order_type: str
+    ) -> Optional[float]:
+        """
+        根據 order type 決定成交價
+        Args:
+            i: bar index
+            action: "entry" or "exit"
+            direction: "buy" or "sell"
+            target: target price (from entry_price / exit_price column)
+            order_type: "stop", "limit", or "market"
 
-    def _try_exit(self, i: int, signal: int, holding: str):
-        """嘗試出場"""
-        exit_signal = -1 if holding == "buy" else 1
-        if signal != exit_signal:
-            self._np_position[i] = 1 if holding == "buy" else -1
-            return
-
-        price = self._get_order_price(i, "exit", signal, self._np_exit_price[i])
-        if price is not None:
-            self._np_position[i] = 0
-            self._np_exit[i] = abs(price)
-
-    # ============================================================
-    # Order Type + Gap Handling (你嘅獨家本領)
-    # ============================================================
-    def _get_order_price(self, i: int, action: str, signal: int, target: float) -> Optional[float]:
-        """根據 Order Type 決定成交價（保留你原設計）"""
-        order_type = self.config.entry_order_type if action == "entry" else self.config.exit_order_type
-        o, h, l, c = self._np_Open[i], self._np_High[i], self._np_Low[i], self._np_Close[i]
-
+        Returns:
+            成交價 (buy 負數, sell 正數), None 表示唔成交
+        """
         if order_type == "market":
-            return o * signal
+            sign = -1 if direction == "buy" else 1
+            return sign * self.np_open[i]
 
-        if np.isnan(target):
-            return None
+        o, h, l, c = self.np_open[i], self.np_high[i], self.np_low[i], self.np_close[i]
 
-        # Stop Order
         if order_type == "stop":
-            if signal == 1:  # 買入停損：升穿 target
-                if o >= target:
-                    return self._handle_gap(i, action, signal, target)
-                if h >= target:
-                    return target * signal
-            else:  # 賣出停損：跌穿 target
-                if o <= target:
-                    return self._handle_gap(i, action, signal, target)
-                if l <= target:
-                    return target * signal
+            return self._check_stop(i, action, direction, target, o, h, l, c)
+        elif order_type == "limit":
+            return self._check_limit(direction, target, o, h, l)
+
+        return None 
+# ================================================= #
+    def _check_stop(
+            self, i: int, action: str, direction: str,
+            target: float, o: float, h: float, l: float, c: float
+    ) -> Optional[float]:
+        """
+        Stop order: 價格突破目標價先成交
+        Buy stop: 升穿 → 買入
+        Sell stop: 跌穿 → 沽空
+        """
+        if direction == "buy":
+            if o >= target:
+                return self._handle_gap(action, i, direction, target)
+            if h >= target:
+                return -target
             return None
-
-        # Limit Order
-        if order_type == "limit":
-            if signal == 1:  # 限價買入：跌到 target
-                if o <= target:
-                    return o * signal
-                if l <= target:
-                    return target * signal
-            else:  # 限價賣出：升到 target
-                if o >= target:
-                    return o * signal
-                if h >= target:
-                    return target * signal
+        else:
+            if o <= target:
+                return self._handle_gap(action, i, direction, target)
+            if l <= target:
+                return target
             return None
-
-        return None
-
-    def _handle_gap(self, i: int, action: str, signal: int, target: float) -> Optional[float]:
-        """處理開市跳空（保留你原設計）"""
-        gap_method = self.config.gap_entry if action == "entry" else self.config.gap_exit
-        o, c = self._np_Open[i], self._np_Close[i]
+# ------------------------------------------------- #
+    def _check_limit(self, direction, target, o, h, l):
+        """Limit order: 到價就成交"""
+        if direction == "buy":
+            if o <= target:
+                # 開市已到價 → 直接用 open（比掛單價更好或相等）
+                return -o
+            if l <= target:
+                return -target
+            return None
+        else:
+            if o >= target:
+                return o
+            if h >= target:
+                return target
+            return None
+# ================================================= #
+# Gap Handling (Unified)
+# ================================================= #
+    def _handle_gap(
+            self, action: str, i: int, direction: str, target: float
+    ) -> Optional[float]:
+        """
+        統一處理開市跳空
+        Args:
+            action: "entry" or "exit"
+            i: bar index
+            direction: "buy" or "sell"
+            target: target price
+        Returns:
+            成交價 or None (give_up)
+        """
+        gap_method = self.gap_entry if action == "entry" else self.gap_exit
+        o, h, l, c = self.np_open[i], self.np_high[i], self.np_low[i], self.np_close[i]
+        sign = -1 if direction == "buy" else 1
 
         if gap_method == "give_up":
             return None
         elif gap_method == "open":
-            return o * signal
+            return sign * o
         elif gap_method == "close":
-            return c * signal
+            return sign * c
         elif gap_method == "wait_close":
-            return c * signal
-        return o * signal
+            if direction == "buy":
+                return sign * (target if l <= target else c)
+            else:
+                return sign * (target if h >= target else c)
+        elif gap_method == "wait_give_up":
+            if direction == "buy":
+                return sign * target if l <= target else None
+            else:
+                return sign * target if h >= target else None
 
-    def _process_eac_bar(self, i: int, prev_pos: int, signal: int):
-        """Exit-at-Close 模式"""
-        if prev_pos == 0 and signal != 0:
-            price = self._get_order_price(i, "entry", signal, self._np_entry_price[i])
-            if price is not None:
-                self._np_position[i] = signal
-                self._np_entry[i] = price
-                self._np_exit[i] = self._np_Close[i]
-        else:
-            self._np_position[i] = prev_pos
+        return sign * o  # Default: open price
 
-    def _simulate_strong_hold(self):
-        """Strong Hold 模式"""
-        factor = 1 if self.config.direction == "buy" else -1
-        self._np_position[:] = factor
-        self._np_entry[0] = -self._np_Open[0] * factor
-        self._np_exit[-1] = self._np_Close[-1] * factor
-        self._np_position[-1] = 0
+# ================================================= # 
+    def get_trade_log(self, rolling=0):
+        """
+        提取交易日誌
+        Args:
+            rolling: 包含交易前後 n 行
+        Returns:
+            DataFrame with trades + surrounding n rows
+        """
+        # 創建非NaN標記（1表示非NaN，0表示NaN）
+        non_nan_flag = (self.df["entry"].notna() | self.df["exit"].notna()).astype(int)
 
-    def _close_position_on_last_day(self):
-        """最後一日強制平倉"""
-        if self._np_position[-1] == 0:
-            return
-        self._np_position[-1] = 0
-        self._np_exit[-1] = self._np_Close[-1] if self._np_position[-2] == 1 else -self._np_Close[-1]
+        # 設置窗口大小為 n+1（包含非NaN行及其後n行 - 但我們要前n行）
+        window_size = rolling + 1
 
-    def _sync_to_dataframe(self):
-        """將結果寫回 DataFrame"""
-        self.df["position"] = self._np_position
-        self.df["entry"] = self._np_entry
-        self.df["exit"] = self._np_exit
+        # 使用rolling窗口但調整方向 - 反轉數據
+        reversed_flag = non_nan_flag[::-1]  # 反轉序列
+
+        # 在反轉的數據上使用rolling窗口
+        rolling_sum = reversed_flag.rolling(window=window_size, min_periods=1).sum()
+
+        # 再反轉回來
+        final_flag = rolling_sum[::-1] > 0
+
+        return self.df[final_flag]   
+# ------------------------------------------------- #
+# ------------------------------------------------- #
+# ------------------------------------------------- #
+# ------------------------------------------------- # 
+# ------------------------------------------------- #
+# ------------------------------------------------- # 
+# ------------------------------------------------- #
+
+# ================================================= #
+# ------------------------------------------------- #
+# ------------------------------------------------- #
+# ------------------------------------------------- #
+# ------------------------------------------------- #
+# ------------------------------------------------- #
+# ------------------------------------------------- # 
+# ================================================= #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
