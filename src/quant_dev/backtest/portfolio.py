@@ -1,4 +1,4 @@
-# src/quant_dev/backtest/portfolio.py
+# quant_dev/backtest/portfolio.py
 """
 Portfolio - 多策略組合回測 (CV 版)
 保留：多策略加權、NAV/ATH/DD、精簡績效指標
@@ -6,8 +6,8 @@ Portfolio - 多策略組合回測 (CV 版)
 """
 import pandas as pd
 import numpy as np
-from typing import List, Optional, Dict, Any
-
+from typing import List, Optional, Dict, Any 
+import matplotlib.pyplot as plt
 from .strategy import Strategy
 
 
@@ -389,3 +389,103 @@ class Portfolio:
             )
 
         return self.df[flag.astype(bool)].sort_index(ascending=False)
+
+    def plot(self, figsize: tuple = (12, 6), title: str = None):
+        """
+        繪製 Portfolio NAV 及 Drawdown
+
+        Args:
+            figsize: 圖表大小 (default: (12, 6))
+            title: 圖表標題 (default: 自動生成)
+        """
+        if not self._backtest_done:
+            self.backtest()
+
+        if title is None:
+            ticker_str = "_".join(self.tickers)
+            title = f"Portfolio NAV ({ticker_str})"
+
+        fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True)
+
+        # 圖1: NAV
+        ax1 = axes[0]
+        ax1.plot(self.df.index, self.df['nav'], label='Portfolio NAV', color='blue', linewidth=1.5)
+        ax1.axhline(y=self.initial, color='gray', linestyle='--', label=f'Initial Capital (${self.initial:,.0f})')
+        ax1.set_title(title)
+        ax1.set_ylabel('NAV ($)')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        # 圖2: Drawdown
+        ax2 = axes[1]
+        ax2.fill_between(self.df.index, 0, self.df['dd'] * 100, color='red', alpha=0.3, label='Drawdown')
+        ax2.set_title('Drawdown')
+        ax2.set_ylabel('Drawdown (%)')
+        ax2.set_xlabel('Date')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.show()
+        return fig
+
+
+
+if __name__ == "__main__":
+    # 使用示範
+    from quant_dev.backtest.portfolio import Portfolio
+    pf = Portfolio(
+        strategies=strats,
+        weights=[0.6, 0.4],      # 60% AAPL, 40% TSLA
+        leverage=1.0,
+        initial=100000.0, 
+    )
+
+    # 3. 執行回測
+    pf.backtest()
+
+    # 4. 睇結果
+    print(pf.generate_report())
+
+    # 5. 睇交易記錄
+    trade_log = pf.get_trade_log()
+    
+    from quant_dev.backtest.portfolio import Portfolio
+    pf = Portfolio(
+        strategies=strats,
+        weights=[0.6, 0.4],      # 60% AAPL, 40% TSLA
+        leverage=1.0,
+        initial=100000.0, 
+    )
+
+    # 3. 執行回測
+    pf.backtest()
+
+    # 4. 睇結果
+    print(pf.generate_report()) 
+
+    # 5. 睇交易記錄
+    trade_log = pf.get_trade_log()
+    print(trade_log[['nav', 'cash', 'trade_pnl']].head(10))
+
+
+    import matplotlib.pyplot as plt
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(pf.df.index, pf.df['nav'], label='Portfolio NAV')
+    plt.axhline(y=pf.initial, color='gray', linestyle='--', label='Initial Capital')
+    plt.title('Portfolio NAV')
+    plt.xlabel('Date')
+    plt.ylabel('NAV ($)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+
+
+
+
+
+
+
+

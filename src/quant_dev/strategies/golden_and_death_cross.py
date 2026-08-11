@@ -1,4 +1,4 @@
-# src/quant_dev/strategies/golden_and_death_cross.py
+# quant_dev/strategies/golden_and_death_cross.py
 """
 黃金交叉/死亡交叉策略
 """

@@ -1,4 +1,4 @@
-# src/quant_dev/data/manager.py
+# quant_dev/data/manager.py
 """
 DataManager - 統一數據管理入口 (Standalone Version)
 完全自包含，不依賴 on_finance 任何模組。
@@ -182,8 +182,7 @@ class DataManager:
         end: Optional[datetime] = None,
     ) -> pd.DataFrame:
         """
-        下載單一股票 (內部方法)
-        風格抄返 on_finance/data/loader.py
+        下載單一股票 (內部方法) 
         """
         ticker = ticker.upper()
 
