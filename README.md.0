@@ -1,5 +1,4 @@
 
-```markdown
 # Quant Dev - 量化交易回測系統
 
 [![Python](https://img.shields.io/badge/Python-3.12-blue)](https://www.python.org/)
@@ -24,11 +23,10 @@
 
 ## 🏗️ 系統架構
 
-```
 DataManager → Strategy → Portfolio → FastAPI → Swagger UI
      ↓            ↓          ↓          ↓
   (數據下載)  (交易模擬)  (組合管理)  (API 服務)
-```
+
 
 ---
 
@@ -151,7 +149,7 @@ quant-dev-git/
 
 ## 🙋‍♂️ 關於我
 
-我係一個 **由公務員轉型嘅 Python Quant Developer**。呢個專案係我由零開始構建嘅完整量化回測系統，展示我嘅 **工程能力** 同 **量化思維**。
+熱衷於 **Python 開發** 同 **量化交易系統設計**。呢個專案係我由零開始構建嘅完整量化回測系統，展示我嘅 **工程能力** 同 **量化思維**。
 
 - 🔗 GitHub: [ipython168-git](https://github.com/ipython168-git)
 - 💼 LinkedIn: [LinkedIn](https://www.linkedin.com/in/ka-on-yip-5775b0429/)
