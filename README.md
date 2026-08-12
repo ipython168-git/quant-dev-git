@@ -22,11 +22,11 @@
 ---
 
 ## 🏗️ 系統架構
-
+```
 DataManager → Strategy → Portfolio → FastAPI → Swagger UI
      ↓            ↓          ↓          ↓
   (數據下載)  (交易模擬)  (組合管理)  (API 服務)
-
+```
 
 ---
 
