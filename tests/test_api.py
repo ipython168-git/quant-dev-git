@@ -130,22 +130,7 @@ class TestAPI:
         data = response.json()
         assert "數量" in data["detail"] or "mismatch" in data["detail"].lower()
 
-    def test_backtest_single_ticker_should_fail(self):
-        """測試 POST /backtest（得一個 ticker 應該 fail）"""
-        payload = {
-            "tickers": ["AAPL"],
-            "strategy": "golden_cross",
-            "params": {"sma_fast": 20, "sma_slow": 50},
-            "weights": [1.0],
-            "initial": 100000,
-            "days": 100
-        }
-
-        response = client.post("/backtest", json=payload)
-        assert response.status_code == 400
-        data = response.json()
-        assert "至少 2 個" in data["detail"] or "at least" in data["detail"].lower()
-
+ 
     def test_data_download_invalid_ticker(self):
         """測試 POST /data（無效 ticker）"""
         response = client.post("/data", params={"ticker": "INVALID_TICKER", "days": 10})

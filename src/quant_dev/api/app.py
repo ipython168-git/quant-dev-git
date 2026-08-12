@@ -37,7 +37,8 @@ def _check_csv_exists(ticker: str, timeframe: str = "1d") -> bool:
     dm = DataManager()
     interval = dm._timeframe_to_interval(timeframe)
     cache_path = dm._get_cache_path(ticker.upper(), interval, prepost=False)
-    return cache_path.exists()
+    return cache_path.is_file() and cache_path.stat().st_size > 0
+
 
 
 # ============================================================
