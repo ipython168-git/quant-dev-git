@@ -151,7 +151,7 @@ quant-dev-git/
 
 熱衷於 **Python 開發** 同 **量化交易系統設計**。呢個專案係我由零開始構建嘅完整量化回測系統，展示我嘅 **工程能力** 同 **量化思維**。
 
-- 🔗 GitHub: [ipython168-git](https://github.com/ipython168-git)
+- 🔗 GitHub: [ipython168-git](https://github.com/ipython168-git/quant-dev-git)
 - 💼 LinkedIn: [LinkedIn](https://www.linkedin.com/in/ka-on-yip-5775b0429/)
 
 ---
