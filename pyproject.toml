@@ -15,6 +15,7 @@ dependencies = [
     "numpy>=1.23.0",
     "yfinance>=0.2.0",
     "pytz>=2022.0",
+    "matplotlib>=3.5.0",
 ]
 
 # 選擇性依賴 (Optional Dependencies)
