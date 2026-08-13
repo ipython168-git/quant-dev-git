@@ -57,7 +57,7 @@ pf = Portfolio(strategies=[strat], weights=[1.0])
 pf.backtest()
 print(pf.generate_report())
 ```
-
+ 
 ### 3. 起 API Server
 ```bash
 # 用 ngrok （ 手機／remote 測試 ）
@@ -65,6 +65,10 @@ python -m quant_dev
 
 # 本地開發
 python -m quant_dev --fg
+
+# 直接 vm run
+chmod +x run.sh stop.sh status.sh
+./run.sh
 ```
 
 ---
