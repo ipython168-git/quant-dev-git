@@ -1,6 +1,6 @@
 # quant_dev/strategies/donchian_breakout.py
 """
-突破新高策略
+Donchian Channel breakout strategy.
 """
 import pandas as pd
 import numpy as np
@@ -19,11 +19,11 @@ def create_donchian_breakout_strategy(
     gap_exit: str = "open",
 ) -> Strategy:
     """
-    建立 Donchian Channel 突破策略
+    Create a Donchian Channel breakout strategy.
 
     Args: 
-        ticker: 股票代號
-        period: Donchian 週期 (default: 20)
+        ticker: Stock symbol
+        period: Donchian Channel period (default: 20)
         direction: "buy" / "sell"
         entry_order_type: "market" / "limit" / "stop"
         exit_order_type: "market" / "limit" / "stop"
@@ -31,9 +31,9 @@ def create_donchian_breakout_strategy(
         gap_exit: "open" / "close" / "give_up" / "wait_close" / "wait_give_up"
 
     Returns:
-        已 run 嘅 Strategy 物件
+        Strategy object (already run)
     """ 
-    # 建立 Strategy
+    # Create Strategy
     option = StrategyOption(
         ticker=ticker,
         direction=direction,
@@ -46,17 +46,17 @@ def create_donchian_breakout_strategy(
     strat = Strategy(option)
     df = strat.df
 
-    # 1. 計算 Donchian Channel
+    # 1. Calculate Donchian Channel
     df['HIGH_DONCHIAN'] = df['High'].rolling(period).max()
     df['LOW_DONCHIAN'] = df['Low'].rolling(period).min()
 
-    # 2. 產生信號（用 shift 避免未來數據）
-    # 突破上軌：今日 High > 昨日上軌
+    # 2. Generate signals (using shift to avoid look-ahead bias)
+    # Break above upper band: today's High > yesterday's upper band
     df['signal_b'] = df['High'] > df['HIGH_DONCHIAN'].shift(1)
-    # 跌破下軌：今日 Low < 昨日下軌
+    # Break below lower band: today's Low < yesterday's lower band
     df['signal_s'] = df['Low'] < df['LOW_DONCHIAN'].shift(1)
 
-    # 3. 設定目標價
+    # 3. Set target prices
     df['entry_price'] = df['HIGH_DONCHIAN'].shift(1)
     df['exit_price'] = df['LOW_DONCHIAN'].shift(1)
 

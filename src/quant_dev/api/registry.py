@@ -1,6 +1,6 @@
 # quant_dev/api/registry.py
 """
-策略註冊表 - 所有可用策略嘅登記處
+Strategy registry - registration point for all available strategies.
 """
 from quant_dev.strategies import (
     create_golden_and_death_cross_strategy,
@@ -14,8 +14,8 @@ from quant_dev.strategies import (
 STRATEGY_REGISTRY = {
     "golden_cross": {
         "name": "golden_cross",
-        "display_name": "黃金交叉/死亡交叉",
-        "description": "短期 SMA 升穿/跌穿長期 SMA 時進出",
+        "display_name": "Golden Cross / Death Cross",
+        "description": "Entry/exit when short-term SMA crosses above/below long-term SMA",
         "function": create_golden_and_death_cross_strategy,
         "default_params": {
             "sma_fast": 20,
@@ -30,8 +30,8 @@ STRATEGY_REGISTRY = {
     },
     "donchian": {
         "name": "donchian",
-        "display_name": "Donchian 突破策略",
-        "description": "價格突破 N 日高/低位時進出",
+        "display_name": "Donchian Breakout",
+        "description": "Entry/exit when price breaks above/below N-day high/low",
         "function": create_donchian_breakout_strategy,
         "default_params": {
             "period": 20,
@@ -47,14 +47,14 @@ STRATEGY_REGISTRY = {
 
 
 def get_strategy(name: str):
-    """攞策略 function"""
+    """Get strategy function by name"""
     if name not in STRATEGY_REGISTRY:
         return None
     return STRATEGY_REGISTRY[name]
 
 
 def list_strategies():
-    """列出所有策略"""
+    """List all available strategies"""
     return [
         {
             "name": info["name"],

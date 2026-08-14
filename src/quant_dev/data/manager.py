@@ -1,12 +1,13 @@
 # quant_dev/data/manager.py
 """
-DataManager - 統一數據管理入口 (Standalone Version)
-完全自包含，不依賴 on_finance 任何模組。
+DataManager - Unified data management entry point (Standalone Version).
+Fully self-contained, with no dependency on on_finance modules.
 
-用法：
+Usage:
     dm = DataManager()
     df = dm.get_or_fetch("AAPL", timeframe="1d", days=365)
     df = dm.load_csv("AAPL", timeframe="1d", start_date="2025-01-01")
+
 """
 import pytz
 import yfinance as yf
@@ -22,10 +23,11 @@ logger = logging.getLogger(__name__)
 
 class DataManager:
     """
-    統一數據管理器 (Standalone Version)
-    Index 原則：
-    - 日K：純日期 (date-only, timezone-naive)
-    - 分鐘K：UTC datetime (timezone-naive, UTC values)
+    Unified data manager (Standalone Version).
+
+    Index conventions:
+    - Daily bars: date-only (timezone-naive)
+    - Intraday bars: UTC datetime (timezone-naive, UTC values)
     """
 
     def __init__(
@@ -34,17 +36,17 @@ class DataManager:
         data_dir: Optional[str] = None,
     ):
         """
-        初始化 DataManager
+        Initialize the DataManager.
 
         Args:
-            market_tz: 市場時區 (預設美國東部時間)
-            data_dir: 數據儲存目錄 (預設為當前目錄下的 data/)
+            market_tz: Market timezone (default: America/New_York)
+            data_dir: Directory for storing cached data (default: ./data)
         """
         self.data_dir = Path(data_dir) if data_dir else Path("data")
         self.market_tz = market_tz
         self._tz = pytz.timezone(market_tz)
 
-        # 確保數據目錄存在
+        # Ensure data directory exists
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
     # ================================================================
@@ -61,18 +63,18 @@ class DataManager:
         force_download: bool = False,
     ) -> pd.DataFrame:
         """
-        獲取數據 (從快取或下載)
+        Retrieve data (from cache or download).
 
         Args:
-            ticker: 股票代號 (如 'AAPL', 'BTC-USD')
-            timeframe: 時間週期 ('1d', '1h', '30m', '15m', '5m', '1m')
-            days: 獲取天數
-            prepost: 是否包含盤前盤後
-            auto_adjust: 是否自動調整價格
-            force_download: 是否強制重新下載
+            ticker: Stock symbol (e.g., 'AAPL', 'BTC-USD')
+            timeframe: Timeframe ('1d', '1h', '30m', '15m', '5m', '1m')
+            days: Number of days to fetch
+            prepost: Include pre-market / after-hours data
+            auto_adjust: Auto-adjust prices
+            force_download: Force re-download even if cache exists
 
         Returns:
-            包含 OHLCV 的 DataFrame
+            DataFrame containing OHLCV data
         """
         interval = self._timeframe_to_interval(timeframe)
 
@@ -108,17 +110,17 @@ class DataManager:
         end_date: Optional[str] = None,
     ) -> pd.DataFrame:
         """
-        從 CSV 載入數據 (支援 Yahoo Finance MultiIndex 格式)
+        Load data from CSV (supports Yahoo Finance MultiIndex format).
 
         Args:
-            ticker: 股票代號
-            timeframe: 時間週期
-            prepost: 是否包含盤前盤後
-            start_date: 開始日期 (可選)
-            end_date: 結束日期 (可選)
+            ticker: Stock symbol
+            timeframe: Timeframe
+            prepost: Include pre-market / after-hours data
+            start_date: Start date (optional)
+            end_date: End date (optional)
 
         Returns:
-            包含 OHLCV 的 DataFrame
+            DataFrame containing OHLCV data
         """
         interval = self._timeframe_to_interval(timeframe)
         file_path = self._get_cache_path(ticker, interval, prepost)
@@ -151,16 +153,16 @@ class DataManager:
         prepost: bool = False,
     ) -> List[pd.DataFrame]:
         """
-        批量獲取多個股票數據
+        Fetch data for multiple symbols in batch.
 
         Args:
-            tickers: 股票代號列表
-            timeframe: 時間週期
-            days: 獲取天數
-            prepost: 是否包含盤前盤後
+            tickers: List of stock symbols
+            timeframe: Timeframe
+            days: Number of days to fetch
+            prepost: Include pre-market / after-hours data
 
         Returns:
-            DataFrame 列表
+            List of DataFrames
         """
         dfs = []
         for ticker in tickers:
@@ -169,7 +171,7 @@ class DataManager:
         return dfs
 
     # ================================================================
-    # Internal Methods (參考 on_finance 風格)
+    # Internal Methods 
     # ================================================================
 
     def _download(
@@ -182,7 +184,7 @@ class DataManager:
         end: Optional[datetime] = None,
     ) -> pd.DataFrame:
         """
-        下載單一股票 (內部方法) 
+        Download single stock data (internal method).
         """
         ticker = ticker.upper()
 
@@ -209,8 +211,8 @@ class DataManager:
 
     def _read_csv(self, file_path: Path) -> pd.DataFrame:
         """
-        讀取 CSV (標準格式)
-        假設第一欄係 Date，會 parse 做 datetime
+        Read CSV (standard format).
+        Assumes the first column is 'Date', parsed as datetime.
         """ 
         # 標準格式：第一欄係 Date
         df = pd.read_csv(file_path, index_col=0, parse_dates=True)
@@ -222,15 +224,15 @@ class DataManager:
 
     def _save_csv(self, df: pd.DataFrame, file_path: Path) -> None:
         """
-        儲存 CSV (標準格式，唔用 MultiIndex)
-        風格抄返 on_finance/data/loader.py
+        Save CSV (standard format, no MultiIndex).
+        Style follows on_finance/data/loader.py.
         """
         df.to_csv(file_path)
 
     def _get_cache_path(self, ticker: str, interval: str, prepost: bool) -> Path:
         """
-        獲取快取檔案路徑
-        風格抄返 on_finance/data/loader.py
+        Get cache file path.
+        Style follows on_finance/data/loader.py.
         """
         folder = self.data_dir / ("datetime_ohlc" if interval in ("2m", "5m", "15m", "30m", "60m") else "")
         folder.mkdir(parents=True, exist_ok=True)
@@ -238,7 +240,7 @@ class DataManager:
         return folder / filename
 
     def _timeframe_to_interval(self, timeframe: str) -> str:
-        """將 timeframe 轉換為 yfinance interval"""
+        """Convert timeframe to yfinance interval."""
         mapping = {
             "1d": "1d",
             "1h": "60m",
@@ -251,14 +253,14 @@ class DataManager:
         return mapping.get(timeframe, timeframe)
 
     # ================================================================
-    # Index Normalization (同你原本一樣，冇改)
+    # Index Normalization 
     # ================================================================
 
     def _normalize_index(self, df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
         """
-        統一 index 格式：
-        - 日K：純日期 DatetimeIndex（timezone-naive）
-        - 分鐘K：UTC datetime（timezone-naive, UTC values）
+        Normalize index format:
+        - Daily bars: date-only DatetimeIndex (timezone-naive)
+        - Intraday bars: UTC datetime (timezone-naive, UTC values)
         """
         df = df.copy()
 
@@ -271,7 +273,7 @@ class DataManager:
         return df
 
     def _normalize_daily_index(self, df: pd.DataFrame) -> pd.DataFrame:
-        """日K → 純日期（timezone-naive）"""
+        """Daily bars → date-only (timezone-naive)."""
         if not isinstance(df.index, pd.DatetimeIndex):
             df.index = pd.to_datetime(df.index, utc=True)
 
@@ -282,7 +284,7 @@ class DataManager:
         return df
 
     def _normalize_intraday_index(self, df: pd.DataFrame) -> pd.DataFrame:
-        """分鐘K → UTC datetime (timezone-naive)"""
+        """Intraday bars → UTC datetime (timezone-naive)."""
         if not isinstance(df.index, pd.DatetimeIndex):
             df.index = pd.to_datetime(df.index, utc=True)
 
@@ -294,11 +296,11 @@ class DataManager:
         return df
 
     # ================================================================
-    # Timezone Helpers (你原本嘅功能)
+    # Timezone Helpers 
     # ================================================================
 
     def to_market_time(self, dt) -> datetime:
-        """將 UTC 時間轉換為市場當地時間"""
+        """Convert UTC time to market local time."""
         if isinstance(dt, np.datetime64):
             dt = pd.Timestamp(dt).to_pydatetime()
         elif isinstance(dt, pd.Timestamp):
@@ -312,11 +314,11 @@ class DataManager:
         return dt
 
     def now_market(self) -> datetime:
-        """獲取當前市場時間"""
+        """Get current time in market timezone."""
         return datetime.now(self._tz)
 
     def info(self, df: pd.DataFrame) -> str:
-        """顯示 DataFrame 的調試資訊"""
+        """Display debug information for the DataFrame."""
         return (
             f"Shape: {df.shape}\n"
             f"Index type: {type(df.index)}\n"

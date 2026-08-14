@@ -1,6 +1,6 @@
 # quant_dev/backtest/metrics.py
 """
-績效指標計算模組
+Performance metrics calculation module.
 """
 import pandas as pd
 import numpy as np
@@ -12,33 +12,33 @@ def calc_metrics(
     initial_capital: float = 100000.0,
 ) -> Dict[str, Any]:
     """
-    計算策略績效指標（用 position shift 1 避免未來數據）
+    Calculate strategy performance metrics (uses position shift 1 to avoid look-ahead bias).
 
     Args:
-        df: 包含 position, Close 嘅 DataFrame
-        initial_capital: 初始資金
+        df: DataFrame containing position and Close columns
+        initial_capital: Initial capital amount
 
     Returns:
-        績效指標 dict
+        Performance metrics dict
     """
     df = df.copy()
 
-    # 1. 計 equity curve
+    # 1. Calculate equity curve
     df['daily_return'] = df['Close'].pct_change().fillna(0)
     df['strategy_return'] = df['position'].shift(1).fillna(0) * df['daily_return']
     df['equity'] = initial_capital * (1 + df['strategy_return']).cumprod()
 
-    # 2. 基本指標
+    # 2. Basic metrics
     total_ret = (df['equity'].iloc[-1] / initial_capital) - 1
     n = len(df)
     annual_ret = (1 + total_ret) ** (252 / n) - 1 if n > 0 else 0
     volatility = df['strategy_return'].std() * np.sqrt(252) if n > 1 else 0
     sharpe = annual_ret / volatility if volatility > 0 else 0
 
-    # 3. 最大回撤
+    # 3. Maximum drawdown
     max_dd = (df['equity'].cummax() - df['equity']).max() / df['equity'].max() if df['equity'].max() > 0 else 0
 
-    # 4. 勝率（用 entry/exit 計）
+    # 4. Win rate (calculated from entry/exit)
     win_rate, total_trades = _calc_win_rate(df)
 
     return {
@@ -57,22 +57,22 @@ def calc_metrics_from_strat(
     initial_capital: float = 100000.0,
 ) -> Dict[str, Any]:
     """
-    從 Strategy 物件計算績效指標（方便 API call）
+    Calculate performance metrics from a Strategy object (convenience for API calls).
 
     Args:
-        strat: Strategy 物件（已 run）
-        initial_capital: 初始資金
+        strat: Strategy object (already run)
+        initial_capital: Initial capital amount
 
     Returns:
-        績效指標 dict
+        Performance metrics dict
     """
     return calc_metrics(strat.df, initial_capital)
 
 
 def _calc_win_rate(df: pd.DataFrame) -> tuple:
     """
-    從 entry/exit 計算勝率（內部 function）
-    假設 entry 係負數（俾錢），exit 係正數（收錢）
+    Calculate win rate from entry/exit (internal function).
+    Assumes entry is negative (paying), exit is positive (receiving).
     """
     trades = df[df['entry'].notna() | df['exit'].notna()]
     total_trades = len(trades)
@@ -88,7 +88,7 @@ def _calc_win_rate(df: pd.DataFrame) -> tuple:
         if not pd.isna(row['entry']):
             entry_val = row['entry']
         if not pd.isna(row['exit']) and entry_val is not None:
-            # entry 負數，exit 正數
+            # entry is negative, exit is positive
             profit = abs(row['exit']) - abs(entry_val)
             profits.append(profit)
             entry_val = None  # reset

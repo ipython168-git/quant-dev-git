@@ -1,7 +1,7 @@
 # quant_dev/backtest/strategy.py
 """
-精簡版回測引擎 (Strategy)
-保留核心：Order Type, Gap Handling for swing trade
+Lightweight backtesting engine (Strategy).
+Core features: Order Type, Gap Handling for swing trading.
 """
 import pandas as pd
 import numpy as np
@@ -16,7 +16,7 @@ pd.set_option("display.max_columns", None)
 # ================================================= #
 @dataclass
 class StrategyOption:
-    """策略配置"""
+    """Strategy configuration"""
     ticker: str
     direction: str = "buy"              # "buy" / "sell"
     entry_order_type: str = "stop"    # "market" / "limit" / "stop"
@@ -32,20 +32,20 @@ class StrategyOption:
 # ================================================= #
 class Strategy:
     """
-    策略回測引擎
-    支援：
-    - Stop / Limit / Market Order 
-    - 統一 Gap Handling 
+    Strategy backtesting engine.
+    Supports:
+    - Stop / Limit / Market Orders
+    - Unified Gap Handling
     """
 # ------------------------------------------------- #
     def __init__(self, option: StrategyOption):
         """
-        初始化 Strategy
-        
+        Initialize the Strategy.
+
         Args:
-            option: StrategyOption 物件
-            data: 必須包含 Open, High, Low, Close 嘅 DataFrame
-                以及 signal_b, signal_s, entry_price, exit_price 4 個 columns
+            option: StrategyOption object
+            data: DataFrame must contain Open, High, Low, Close columns
+                plus signal_b, signal_s, entry_price, exit_price (4 columns)
         """
         self.option = option 
         self.ticker = option.ticker
@@ -54,12 +54,12 @@ class Strategy:
         self.exit_order_type = option.exit_order_type
         self.gap_entry = option.gap_entry
         self.gap_exit = option.gap_exit
-        self.mode = "normal"  # 只支援 normal mode
+        self.mode = "normal"  # Only normal mode supported
 
         if option.df is not None:
             self.df = option.df.copy()
         else:
-            # ===== DataManager 載入數據 ===== 
+            # ===== Load data via DataManager ===== 
             dm = DataManager(market_tz=self.option.market_tz)
             self.df = dm.load_csv(
                 ticker=self.option.ticker,
@@ -70,21 +70,21 @@ class Strategy:
 
         self.length = len(self.df)
 
-        # 確保 df 有 required columns (OHLC)
+        # Ensure df has required OHLC columns
         self._check_ohlc() 
-        # 驗證策略參數
+        # Validate strategy parameters
         self._check_strategy_input()
 
-        # 初始化結果 columns
+        # Initialize result columns
         self._init_columns() 
 # ================================================= #
 # Init Helpers
 # ================================================= #
     def _check_ohlc(self):
         if self.df.empty:
-            raise ValueError(f"輸入的{self.option.ticker} DataFrame 是空的")
+            raise ValueError(f"DataFrame for {self.option.ticker} is empty")
         if not {"Open", "High", "Low", "Close"}.issubset(self.df.columns):
-            raise ValueError('DataFrame必須包含"Open", "High", "Low", "Close"列') 
+            raise ValueError('DataFrame must contain "Open", "High", "Low", "Close" columns')
 # ------------------------------------------------- #
     def _check_strategy_input(self):
         if self.direction not in ["buy", "sell"]:
@@ -120,7 +120,7 @@ class Strategy:
         return True
 # ------------------------------------------------- #
     def _init_columns(self):
-        """初始化結果 columns"""
+        """Initialize result columns"""
         self.df["position"] = np.zeros(self.length, dtype=int)  # 持倉狀態
         self.df["entry"] = np.full(self.length, np.nan)  # 買入價
         self.df["exit"] = np.full(self.length, np.nan)  # 賣出價 
@@ -128,8 +128,8 @@ class Strategy:
 # Public API — Run Strategy
 # ================================================= #
     def run(self) -> "Strategy":
-        """執行回測"""
-        # ✅ 喺執行前檢查 4 個必要 columns (signal_b, signal_s, entry_price, exit_price)
+        """Run backtest"""
+        # ✅ Check 4 required columns before execution columns (signal_b, signal_s, entry_price, exit_price)
         self._check_required_columns()
         
         self._prepare_numpy_arrays()
@@ -140,14 +140,14 @@ class Strategy:
 # Internal — Data Preparation
 # ================================================= #
     def _check_required_columns(self):
-        """檢查用戶有冇提供必要嘅 4 個 columns"""
+        """Check if user has provided the 4 required columns"""
         required = ['signal_b', 'signal_s', 'entry_price', 'exit_price']
         missing = [c for c in required if c not in self.df.columns]
         if missing:
             raise ValueError(f"DataFrame 缺少必要 columns: {missing}")
 # ------------------------------------------------- #
     def _prepare_numpy_arrays(self):
-        """將 DataFrame 轉為 numpy array"""
+        """Convert DataFrame to numpy arrays"""
         self.np_open = self.df["Open"].to_numpy(dtype=float)
         self.np_high = self.df["High"].to_numpy(dtype=float)
         self.np_low = self.df["Low"].to_numpy(dtype=float)
@@ -166,7 +166,7 @@ class Strategy:
 # Internal — Trade Simulation (Core)
 # ================================================= #
     def _simulate_trades(self):
-        """主模擬循環（只保留 normal mode）"""
+        """Main simulation loop"""
         # 從第 1 日開始（第 0 日冇前一日數據）
         for i in range(1, self.length):
             self._process_bar(i)
@@ -174,18 +174,18 @@ class Strategy:
         self._close_position_on_last_day()         
 # ------------------------------------------------- # 
     def _sync_to_dataframe(self):
-        """將 numpy arrays 同步返 DataFrame"""
+        """Sync numpy arrays back to DataFrame"""
         self.df["position"] = self.np_position
         self.df["entry"] = self.np_entry
         self.df["exit"] = self.np_exit
 # ------------------------------------------------- # 
     def _process_bar(self, i: int):
         """
-        處理單一 K 線 
-        - normal: 正常 entry/exit 
+        Process a single bar.
+        - normal: normal entry/exit
         """
         prev_pos = self.np_position[i - 1]
-        """Normal mode: 持倉跟隨信號"""
+        """Normal mode: position follows signals"""
         if prev_pos == 0:
             self._try_entry(i)
         elif prev_pos == 1:
@@ -194,11 +194,11 @@ class Strategy:
             self._try_exit(i, "sell") 
 # ------------------------------------------------- #  
     def _close_position_on_last_day(self):
-        # 處理最後一日仍持倉嘅情況  
+        # Handle positions still open on the last day  
         if self.np_position[-1] == 0:
-            return  # 冇持倉，唔使做
+            return  # No position, nothing to do
 
-        # 搵最後一個有效 close price
+        # Find the last valid close price
         close_to_use = self.np_close[-1]
         if np.isnan(close_to_use):
             # Fallback: 由尾向前搵第一個 non-NaN close
@@ -225,7 +225,7 @@ class Strategy:
 # Entry / Exit Logic
 # ================================================= #
     def _try_entry(self, i: int):
-        """嘗試入場"""
+        """Attempt entry"""
         if self.direction == "buy" and self._has_signal(i, "buy"):
             price = self._get_order_price(i, "entry", "buy", self.np_entry_price[i], self.entry_order_type)
             if price is not None:
@@ -241,7 +241,7 @@ class Strategy:
                 return
     # ------------------------------------------------- #
     def _try_exit(self, i: int, holding_direction: str):
-        """嘗試出場。holding_direction: 'buy' (好倉) 或 'sell' (淡倉)"""
+        """Attempt exit. holding_direction: 'buy' (long) or 'sell' (short)"""
         if holding_direction == "buy":
             # 平好倉 = 沽貨 → 用 'sell' direction 去做 stop/limit 判斷
             if self._has_signal(i, "sell"):
@@ -273,7 +273,7 @@ class Strategy:
 # Internal — Signal Check
 # ================================================= #
     def _has_signal(self, i: int, signal_type: str) -> bool:
-        """檢查有冇信號"""
+        """Check if signal exists"""
         if signal_type == "buy":
             return bool(self.np_signal_b[i])
         else:  # "sell"
@@ -287,16 +287,11 @@ class Strategy:
             target: float, order_type: str
     ) -> Optional[float]:
         """
-        根據 order type 決定成交價
+        Determine fill price based on order type.
         Args:
-            i: bar index
-            action: "entry" or "exit"
-            direction: "buy" or "sell"
-            target: target price (from entry_price / exit_price column)
-            order_type: "stop", "limit", or "market"
-
+            ...
         Returns:
-            成交價 (buy 負數, sell 正數), None 表示唔成交
+            Fill price (negative for buy, positive for sell), None if not filled
         """
         if order_type == "market":
             sign = -1 if direction == "buy" else 1
@@ -316,9 +311,9 @@ class Strategy:
             target: float, o: float, h: float, l: float, c: float
     ) -> Optional[float]:
         """
-        Stop order: 價格突破目標價先成交
-        Buy stop: 升穿 → 買入
-        Sell stop: 跌穿 → 沽空
+        Stop order: triggers when price breaks through target.
+        Buy stop: breaks above → buy
+        Sell stop: breaks below → sell
         """
         if direction == "buy":
             if o >= target:
@@ -334,7 +329,7 @@ class Strategy:
             return None
 # ------------------------------------------------- #
     def _check_limit(self, direction, target, o, h, l):
-        """Limit order: 到價就成交"""
+        """Limit order: executes when price reaches target."""
         if direction == "buy":
             if o <= target:
                 # 開市已到價 → 直接用 open（比掛單價更好或相等）
@@ -355,14 +350,14 @@ class Strategy:
             self, action: str, i: int, direction: str, target: float
     ) -> Optional[float]:
         """
-        統一處理開市跳空
+        Unified gap handling for market open.
         Args:
             action: "entry" or "exit"
             i: bar index
             direction: "buy" or "sell"
             target: target price
         Returns:
-            成交價 or None (give_up)
+            Fill price or None (give_up)
         """
         gap_method = self.gap_entry if action == "entry" else self.gap_exit
         o, h, l, c = self.np_open[i], self.np_high[i], self.np_low[i], self.np_close[i]
@@ -390,9 +385,9 @@ class Strategy:
 # ================================================= # 
     def get_trade_log(self, rolling=0):
         """
-        提取交易日誌
+        Extract trade log.
         Args:
-            rolling: 包含交易前後 n 行
+            rolling: Include n rows before and after each trade
         Returns:
             DataFrame with trades + surrounding n rows
         """

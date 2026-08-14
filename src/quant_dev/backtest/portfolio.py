@@ -1,8 +1,8 @@
 # quant_dev/backtest/portfolio.py
 """
-Portfolio - 多策略組合回測 (CV 版)
-保留：多策略加權、NAV/ATH/DD、精簡績效指標
-移除：YAML Config、restore_from_trx、繪圖
+Portfolio - Multi-strategy portfolio backtesting (CV version).
+Features: Multi-strategy weighting, NAV/ATH/DD, simplified metrics.
+Removed: YAML Config, restore_from_trx, plotting.
 """
 import pandas as pd
 import numpy as np
@@ -12,8 +12,7 @@ from .strategy import Strategy
 
 
 class Portfolio:
-    """多策略組合回測引擎 (CV 版)"""
-
+    """Multi-strategy portfolio backtesting engine (CV version)."""
     def __init__(
         self,
         strategies: List[Strategy],
@@ -23,17 +22,17 @@ class Portfolio:
         fee: float = 2.0,
     ):
         """
-        初始化 Portfolio
+        Initialize the Portfolio.
 
         Args:
-            strategies: 已 run 嘅 Strategy 列表
-            weights: 每個策略嘅權重（總和為 1）
-            leverage: 槓桿倍數
-            initial: 初始資金
-            fee: 每筆交易手續費
+            strategies: List of already-run Strategy objects
+            weights: Weight for each strategy (sum to 1)
+            leverage: Leverage multiplier
+            initial: Initial capital
+            fee: Transaction fee per trade
         """
         if not strategies:
-            raise ValueError("strategies 不可為空")
+            raise ValueError("strategies cannot be empty")
 
         self.strategies = strategies
         self.tickers = [s.ticker for s in strategies]
@@ -48,19 +47,19 @@ class Portfolio:
             self.weights = weights
 
         if len(self.weights) != n:
-            raise ValueError("weights 數量必須與 strategies 數量一致")
+            raise ValueError("number of weights must match number of strategies")
 
-        # 初始化
+        # Initialize
         self.df = None
         self.metrics: Dict[str, Any] = {}
         self._backtest_done = False
 
     # ================================================================
-    # 核心回測
+    # Core Backtest
     # ================================================================
 
     def backtest(self) -> "Portfolio":
-        """執行組合回測"""
+        """Run portfolio backtest"""
         self._validate_strategies()
         self._build_arrays()
         self._calculate_all_strategy_returns()
@@ -71,7 +70,7 @@ class Portfolio:
         return self
 
     def _validate_strategies(self):
-        """對齊所有 Strategy 嘅時間軸"""
+        """Align all Strategy time axes"""
         unified_idx = self.strategies[0].df.index
         for strat in self.strategies[1:]:
             unified_idx = unified_idx.union(strat.df.index)
@@ -90,7 +89,7 @@ class Portfolio:
         self.df = pd.DataFrame(index=unified_idx)
 
     def _build_arrays(self):
-        """建立 numpy arrays"""
+        """Build numpy arrays"""
         n_strats = len(self.strategies)
         n_rows = len(self.df)
 
@@ -154,7 +153,7 @@ class Portfolio:
 
         if n_entry != n_exit:
             raise ValueError(
-                f"策略 {n} ({ticker}) entry/exit 數量不匹配: {n_entry} vs {n_exit}"
+                f"Strategy {n} ({ticker}) entry/exit count mismatch: {n_entry} vs {n_exit}"
             )
 
         entries = self.df.loc[mask_entry, entry_col].values
@@ -280,7 +279,7 @@ class Portfolio:
         self._compute_trade_pnl()
 
     def _compute_trade_pnl(self):
-        """計算組合加權 PnL"""
+        """Compute portfolio-weighted PnL"""
         pnl_cols = []
         for n, ticker in enumerate(self.tickers):
             col = f"pnl{n}_{ticker}"
@@ -300,7 +299,7 @@ class Portfolio:
     # ================================================================
 
     def _compute_metrics(self):
-        """計算精簡績效指標：total return, annual return, sharpe, max dd, win rate"""
+        """Compute simplified performance metrics: total return, annual return, sharpe, max dd, win rate"""
         nav = self.df["nav"]
         dd = self.df["dd"]
 
@@ -343,7 +342,7 @@ class Portfolio:
 
     def get_metric(self, key: str) -> Any:
         if not self._backtest_done:
-            raise RuntimeError("請先執行 backtest()")
+            raise RuntimeError("Please run backtest() first")
         return self.metrics.get(key)
 
     def generate_report(self) -> str:
@@ -356,14 +355,14 @@ class Portfolio:
 
         lines = [
             "=" * 50,
-            "Portfolio 績效報告",
+            "Portfolio Performance Report",
             "=" * 50,
-            f"初始資金: ${self.initial:,.2f}",
-            f"最終 NAV: ${self.df['nav'].iloc[-1]:,.2f}",
-            f"組合權重: {weights_str}",
-            f"槓桿: {self.leverage}x",
+            f"Initial Capital: ${self.initial:,.2f}",
+            f"Final NAV: ${self.df['nav'].iloc[-1]:,.2f}",
+            f"Portfolio Weights: {weights_str}",
+            f"Leverage: {self.leverage}x",
             "-" * 50,
-            "績效指標:",
+            "Performance Metrics:",
         ]
 
         for k, v in self.metrics.items():
@@ -392,11 +391,11 @@ class Portfolio:
 
     def plot(self, figsize: tuple = (12, 6), title: str = None):
         """
-        繪製 Portfolio NAV 及 Drawdown
+        Plot Portfolio NAV and Drawdown.
 
         Args:
-            figsize: 圖表大小 (default: (12, 6))
-            title: 圖表標題 (default: 自動生成)
+            figsize: Figure size (default: (12, 6))
+            title: Chart title (default: auto-generated)
         """
         if not self._backtest_done:
             self.backtest()
@@ -432,7 +431,7 @@ class Portfolio:
 
 
 if __name__ == "__main__":
-    # 使用示範
+    # Usage example
     from quant_dev.backtest.portfolio import Portfolio
     pf = Portfolio(
         strategies=strats,
@@ -441,34 +440,16 @@ if __name__ == "__main__":
         initial=100000.0, 
     )
 
-    # 3. 執行回測
+    # Run backtest
     pf.backtest()
 
-    # 4. 睇結果
+    # View results
     print(pf.generate_report())
 
-    # 5. 睇交易記錄
-    trade_log = pf.get_trade_log()
-    
-    from quant_dev.backtest.portfolio import Portfolio
-    pf = Portfolio(
-        strategies=strats,
-        weights=[0.6, 0.4],      # 60% AAPL, 40% TSLA
-        leverage=1.0,
-        initial=100000.0, 
-    )
-
-    # 3. 執行回測
-    pf.backtest()
-
-    # 4. 睇結果
-    print(pf.generate_report()) 
-
-    # 5. 睇交易記錄
-    trade_log = pf.get_trade_log()
+    # View trade log
+    trade_log = pf.get_trade_log() 
     print(trade_log[['nav', 'cash', 'trade_pnl']].head(10))
-
-
+ 
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(12, 6))

@@ -1,6 +1,6 @@
 # quant_dev/api/app.py
 """
-FastAPI App - 極簡量化回測 API
+FastAPI App - Minimal Quantitative Backtest API.
 """
 from fastapi import FastAPI, HTTPException
 from datetime import datetime
@@ -21,7 +21,7 @@ from quant_dev.backtest.portfolio import Portfolio
 
 app = FastAPI(
     title="Quant Dev API",
-    description="極簡量化回測 API",
+    description="Minimal Quantitative Backtest API",
     version="0.1.0"
 )
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Helper: 檢查 CSV 是否存在
 # ============================================================
 def _check_csv_exists(ticker: str, timeframe: str = "1d") -> bool:
-    """檢查 ticker 嘅 CSV 是否存在（用 DataManager 實際儲存路徑）"""
+    """Check if CSV for the given ticker exists (using DataManager's actual storage path)."""
     dm = DataManager()
     interval = dm._timeframe_to_interval(timeframe)
     cache_path = dm._get_cache_path(ticker.upper(), interval, prepost=False)
@@ -62,7 +62,7 @@ def root():
 
 @app.get("/strategies")
 def get_strategies():
-    """列出所有可用策略"""
+    """List all available strategies"""
     return {
         "count": len(STRATEGY_REGISTRY),
         "strategies": list_strategies()
@@ -71,7 +71,7 @@ def get_strategies():
 
 @app.post("/data")
 def download_ohlc(ticker: str, days: int = 500, force_download: bool = False):
-    """下載 OHLC 數據"""
+    """Download OHLC data"""
     dm = DataManager()
     try:
         df = dm.get_or_fetch(
@@ -82,7 +82,7 @@ def download_ohlc(ticker: str, days: int = 500, force_download: bool = False):
         )
         
         if df.empty:
-            raise HTTPException(status_code=404, detail=f"無法下載 {ticker} 嘅數據")
+            raise HTTPException(status_code=404, detail=f"Failed to download data for {ticker} 嘅數據")
         
         return {
             "status": "success",
@@ -92,7 +92,7 @@ def download_ohlc(ticker: str, days: int = 500, force_download: bool = False):
             "start_date": df.index[0].strftime("%Y-%m-%d"),
             "end_date": df.index[-1].strftime("%Y-%m-%d"),
             "columns": list(df.columns),
-            "message": f"✅ {ticker} 數據已下載 ({len(df)} 行)"
+            "message": f"✅ {ticker} data downloaded ({len(df)} rows)"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -101,7 +101,7 @@ def download_ohlc(ticker: str, days: int = 500, force_download: bool = False):
 @app.post("/backtest", response_model=PortfolioBacktestResponse)
 def run_portfolio_backtest(request: PortfolioBacktestRequest):
     """
-    組合回測（多 ticker + 多策略）
+    Portfolio backtest (multi-ticker + multi-strategy). 
 
     Request body:
     {
@@ -131,7 +131,7 @@ def run_portfolio_backtest(request: PortfolioBacktestRequest):
     if len(weights) != len(tickers):
         raise HTTPException(
             status_code=400,
-            detail=f"weights 數量 ({len(weights)}) 與 tickers 數量 ({len(tickers)}) 不匹配"
+            detail=f"Number of weights ({len(weights)}) does not match number of tickers ({len(tickers)})"
         )
 
     # 檢查策略是否存在
@@ -139,7 +139,7 @@ def run_portfolio_backtest(request: PortfolioBacktestRequest):
     if strategy_info is None:
         raise HTTPException(
             status_code=400,
-            detail=f"策略 '{strategy_name}' 不存在。可用策略: {list(STRATEGY_REGISTRY.keys())}"
+            detail=f"Strategy '{strategy_name}' not found. Available: {list(STRATEGY_REGISTRY.keys())}"
         )
 
     # 合併參數
@@ -151,7 +151,7 @@ def run_portfolio_backtest(request: PortfolioBacktestRequest):
         if req not in final_params:
             raise HTTPException(
                 status_code=400,
-                detail=f"缺少必要參數: {req}。需要: {strategy_info['required_params']}"
+                detail=f"Missing required parameter: {req}. Required: {strategy_info['required_params']}"
             )
 
     # 建立 ticker entry/exit
@@ -163,7 +163,7 @@ def run_portfolio_backtest(request: PortfolioBacktestRequest):
         if not _check_csv_exists(ticker):
             raise HTTPException(
                 status_code=404,
-                detail=f"📁 未找到 {ticker} 嘅數據檔案。請先 call POST /data?ticker={ticker}&days={days} 下載數據"
+                detail=f"📁 Data file for {ticker} not found. Please call POST /data?ticker={ticker}&days={days} first"
             )
             
         logger.info(f"建立策略: {ticker}, days={days}, params={final_params}")
@@ -219,7 +219,7 @@ def run_portfolio_backtest(request: PortfolioBacktestRequest):
         report=report,
         trade_count=len(trade_log),
         image_base64=img_base64,  
-        message=f"✅ 組合回測完成 ({len(tickers)} 個策略)"
+        message=f"✅ Portfolio backtest complete ({len(tickers)} tickers)"
     )
 
 

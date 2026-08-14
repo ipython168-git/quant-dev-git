@@ -13,7 +13,7 @@ def run_server(
     log_level: str = "info",
     reload: bool = False,
 ):
-    """喺 background thread 起 server"""
+    """Start server in background thread"""
     from quant_dev.api.app import app
 
     def _run():
@@ -28,7 +28,7 @@ def run_server(
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     time.sleep(2)
-    print(f"\n✅ Server 已起好 (http://{host}:{port})")
+    print(f"\n✅ Server started (http://{host}:{port})")
     return thread
 
  

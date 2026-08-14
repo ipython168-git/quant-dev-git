@@ -1,13 +1,13 @@
 # quant_dev/api/models.py
 """
-API 資料模型 (Pydantic)
+API data models (Pydantic).
 """
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
 
 class StrategyInfo(BaseModel):
-    """策略資訊"""
+    """Strategy information"""
     name: str
     display_name: str
     description: str
@@ -16,7 +16,7 @@ class StrategyInfo(BaseModel):
 
 
 class PortfolioBacktestRequest(BaseModel):
-    """組合回測請求"""
+    """Portfolio backtest request"""
     tickers: List[str]
     strategy: str
     params: Optional[Dict[str, Any]] = None
@@ -27,7 +27,7 @@ class PortfolioBacktestRequest(BaseModel):
 
 
 class PortfolioBacktestResponse(BaseModel):
-    """組合回測回應"""
+    """Portfolio backtest response"""
     tickers: List[str]
     strategy: str
     params: Dict[str, Any]

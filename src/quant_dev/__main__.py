@@ -1,9 +1,9 @@
 # quant_dev/__main__.py
 """
-quant_dev 主入口點
-用法:
+quant_dev main entry point.
+Usage:
     python -m quant_dev              
-    python -m quant_dev --port 8001  # 指定 port
+    python -m quant_dev --port 8001  # specify port
 """
 import argparse
 import time
@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description="Quant Dev API Server")
     parser.add_argument("--port", type=int, default=8000, help="Server port")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Server host")
-    parser.add_argument("--reload", action="store_true", help="開發模式，自動 reload")
+    parser.add_argument("--reload", action="store_true", help="Development mode, auto-reload on code changes")
     args = parser.parse_args()
  
     import nest_asyncio
@@ -30,14 +30,14 @@ def main():
 
     run_server(args.host, args.port, reload=args.reload) 
 
-    print(f"📱 用手機開: {public_url}")
-    print("按 Ctrl+C 停止\n")
+    print(f"📱 Open on phone: {public_url}")
+    print("按 Ctrl+C to stop\n")
 
     try:
         while True:
             time.sleep(10)
     except KeyboardInterrupt:
-        print("\n🛑 Server 已停止")
+        print("\n🛑 Server stopped")
 
 
 if __name__ == "__main__":

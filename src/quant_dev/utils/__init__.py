@@ -1,5 +1,5 @@
 """
-工具模組
+Utilities module
 """
 from .validation import check_strategy_vs_portfolio
 

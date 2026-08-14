@@ -1,5 +1,5 @@
 """
-回測模組
+Backtest module
 """
 from .strategy import Strategy, StrategyOption
 from .portfolio import Portfolio

@@ -1,6 +1,6 @@
 # quant_dev/strategies/golden_and_death_cross.py
 """
-黃金交叉/死亡交叉策略
+Golden Cross / Death Cross strategy.
 """
 import pandas as pd
 import numpy as np
@@ -20,16 +20,16 @@ def create_golden_and_death_cross_strategy(
     gap_exit: str = "open",
 ) -> Strategy:
     """
-    建立黃金交叉/死亡交叉策略
+    Create a Golden Cross / Death Cross strategy.
 
-    信號邏輯（用 shift 避免未來數據）：
-    - 黃金交叉 (buy): 今日 fast > slow，昨日 fast <= slow
-    - 死亡交叉 (sell): 今日 fast < slow，昨日 fast >= slow
+    Signal logic (using shift to avoid look-ahead bias):
+    - Golden Cross (buy): today fast > slow, yesterday fast <= slow
+    - Death Cross (sell): today fast < slow, yesterday fast >= slow
 
     Args: 
-        ticker: 股票代號
-        sma_fast: 短期均線週期 (default: 20)
-        sma_slow: 長期均線週期 (default: 50)
+        ticker: Stock symbol
+        sma_fast: Short-term SMA period (default: 20)
+        sma_slow: Long-term SMA period (default: 50)
         direction: "buy" / "sell" (default: "buy")
         entry_order_type: "market" / "limit" / "stop" (default: "stop")
         exit_order_type: "market" / "limit" / "stop" (default: "stop")
@@ -37,9 +37,9 @@ def create_golden_and_death_cross_strategy(
         gap_exit: "open" / "close" / "give_up" / "wait_close" / "wait_give_up"
 
     Returns:
-        已 run 嘅 Strategy 物件
+        Strategy object (already run)
     """
-    # 建立 Strategy
+    # Create Strategy
     option = StrategyOption(
         ticker=ticker,
         direction=direction,
@@ -51,24 +51,24 @@ def create_golden_and_death_cross_strategy(
     strat = Strategy(option)
     df = strat.df
 
-    # 1. 計算 SMA
+    # 1. Calculate SMA
     df[f'SMA_{sma_fast}'] = df['Close'].rolling(sma_fast).mean()
     df[f'SMA_{sma_slow}'] = df['Close'].rolling(sma_slow).mean()
 
-    # 2. 產生信號（用 shift(1) 同 shift(2) 避免未來數據）
-    # 黃金交叉：shift(1) = 今日，shift(2) = 昨日
-    # 今日 fast > slow，昨日 fast <= slow
+    # 2. Generate signals (using shift(1) and shift(2) to avoid look-ahead bias)
+    # Golden Cross: shift(1) = today, shift(2) = yesterday
+    # today fast > slow, yesterday fast <= slow
     df['signal_b'] = (
         (df[f'SMA_{sma_fast}'].shift(1) > df[f'SMA_{sma_slow}'].shift(1)) &
         (df[f'SMA_{sma_fast}'].shift(2) <= df[f'SMA_{sma_slow}'].shift(2))
     )
-    # 死亡交叉：今日 fast < slow，昨日 fast >= slow
+    # Death Cross: today fast < slow, yesterday fast >= slow
     df['signal_s'] = (
         (df[f'SMA_{sma_fast}'].shift(1) < df[f'SMA_{sma_slow}'].shift(1)) &
         (df[f'SMA_{sma_fast}'].shift(2) >= df[f'SMA_{sma_slow}'].shift(2))
     )
 
-    # 3. 設定目標價（用前一日嘅 High/Low）
+    # 3. Set target prices (using previous day's High/Low)
     df['entry_price'] = df['Low'].shift(1)
     df['exit_price'] = df['High'].shift(1)
 

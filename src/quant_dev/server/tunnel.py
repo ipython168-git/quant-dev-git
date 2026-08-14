@@ -1,7 +1,7 @@
 # quant_dev/server/tunnel.py
 
 """
-ngrok tunnel 管理
+ngrok tunnel management
 """
 import os
 import sys
@@ -9,10 +9,10 @@ from pyngrok import ngrok
 
 
 def get_ngrok_token() -> str:
-    """搵 ngrok auth token（多種方法）"""
+    """Retrieve ngrok auth token (multiple methods)."""
     token = None
 
-    # 方法 1: .env file
+    # Method 1: .env file
     try:
         from dotenv import load_dotenv
         load_dotenv()
@@ -23,7 +23,7 @@ def get_ngrok_token() -> str:
     except:
         pass
 
-    # 方法 2: Colab Secrets
+    # Method 2: Colab Secrets
     try:
         from google.colab import userdata
         token = userdata.get('ngrok')
@@ -32,43 +32,43 @@ def get_ngrok_token() -> str:
     except Exception as e:
         print(f"⚠️ Colab Secrets 唔 work: {e}")
 
-    # 方法 3: 環境變數
+    # Method 3: Environment variable
     token = os.environ.get('NGROK_AUTHTOKEN')
     if token:
         print("✅ 從環境變數拎到 token")
         return token
 
-    # 方法 4: 手動輸入
+    # Method 4: Manual input
     print("\n" + "="*60)
-    print("⚠️ 請輸入你嘅 ngrok authtoken:")
-    print("   (去 https://dashboard.ngrok.com/get-started/your-authtoken 拎)")
+    print("⚠️ Please enter your ngrok authtoken:")
+    print("   (Get it from https://dashboard.ngrok.com/get-started/your-authtoken)")
     print("="*60)
-    token = input("貼你個 token: ").strip()
+    token = input("Paste your token: ").strip()
     return token
 
 
 def setup_ngrok(port: int = 8000) -> str:
-    """設定 ngrok 並開 tunnel，回傳 public URL"""
+    """Configure ngrok and open tunnel, return public URL"""
     token = get_ngrok_token()
 
     if not token:
-        print("❌ 冇 token，請重新執行")
+        print("❌ No token found, please try again")
         sys.exit(1)
 
     ngrok.set_auth_token(token)
-    print("✅ ngrok auth 已設定")
+    print("✅ ngrok auth configured")
 
     tunnel = ngrok.connect(port)
     return tunnel.public_url
 
 
 def print_endpoints(url: str):
-    """印出可用 endpoints"""
+    """Print available endpoints"""
     print("\n" + "="*60)
-    print("🌐 用手機開呢個 URL:")
+    print("🌐 Open this URL on your phone:")
     print(f"   {url}")
     print("="*60)
-    print("\n📡 可用 Endpoints:")
+    print("\n📡 Available Endpoints:")
     print(f"   GET  {url}/")
     print(f"   GET  {url}/strategies")
     print(f"   POST {url}/data/download?ticker=AAPL&days=500")
