@@ -146,7 +146,7 @@ class TestPortfolio:
             Portfolio(strategies=[])
 
     def test_weights_mismatch(self, sample_strategies):
-        with pytest.raises(ValueError, match="weights weights must match number of strategies"):
+        with pytest.raises(ValueError, match="number of weights must match number of strategies"):
             Portfolio(
                 strategies=sample_strategies,
                 weights=[0.5],
