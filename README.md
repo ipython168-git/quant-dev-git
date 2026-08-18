@@ -30,6 +30,23 @@ DataManager → Strategy → Portfolio → FastAPI → Swagger UI
 
 ---
 
+
+## 📸 Screenshots
+
+### Swagger UI
+![Swagger UI](images/swagger.png)
+
+### Backtest Result
+![Backtest Result](images/backtest_result.jpg)
+
+### Equity Curve
+![Equity Curve](images/equity_curve.png)
+ 
+
+---
+
+
+
 ## 🚀 Quick Start
 
 ### 1. Installation
@@ -46,23 +63,52 @@ export NGROK_AUTHTOKEN="your_ngrok_authtoken"
 
 ### 3. Test with Colab / Jupyter
 ```python
-from quant_dev.data.manager import DataManager
 from quant_dev.strategies import create_golden_and_death_cross_strategy
+from quant_dev.data.manager import DataManager
+from quant_dev.backtest.strategy import Strategy, StrategyOption 
 from quant_dev.backtest.portfolio import Portfolio
+import pandas as pd, numpy as np
 
-# Download data
+# Download data & Create strategy
 dm = DataManager()
-df = dm.get_or_fetch("AAPL", days=500)
-
-# Create strategy
-strat = create_golden_and_death_cross_strategy(ticker="AAPL")
-
-# Portfolio backtest
-pf = Portfolio(strategies=[strat], weights=[1.0])
-pf.backtest()
-print(pf.generate_report())
-```
+tickers = ["AAPL", "TSLA"]
+strats = []
+for ticker in tickers: 
+    df = dm.get_or_fetch(ticker, timeframe="1d", days=1000, force_download=True)
+    strat = create_golden_and_death_cross_strategy(
+        ticker=ticker,
+        sma_fast=20,
+        sma_slow=50,
+        direction="buy",
+        entry_order_type="stop",
+        exit_order_type="stop",
+        gap_entry="open",
+        gap_exit="open",
+    )
+    strats.append(strat)
  
+# Create Portfolio
+pf = Portfolio(
+    strategies=strats,
+    weights=[0.6, 0.4],      # 60% AAPL, 40% TSLA
+    leverage=1.0,
+    initial=100000.0,
+)    
+
+# Run backtest
+pf.backtest() 
+print(pf.generate_report())
+
+# Get trade log
+trade_log = pf.get_trade_log()
+print(trade_log[['nav', 'cash', 'trade_pnl']].head(5))
+
+# View nav / dd
+fig = pf.plot()
+
+
+```
+
 ### 4. Start API Server
 ```bash
 # With ngrok (mobile / remote testing)
