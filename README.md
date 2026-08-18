@@ -34,7 +34,7 @@ DataManager → Strategy → Portfolio → FastAPI → Swagger UI
 ## 📸 Screenshots
 
 ### Swagger UI
-![Swagger UI](images/swagger.png)
+<a href="images/swagger.png"><img src="images/swagger.png" alt="Swagger UI" width="600"/></a>
 
 ### Backtest Result
 ![Backtest Result](images/backtest_result.jpg)
