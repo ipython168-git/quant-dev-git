@@ -208,7 +208,7 @@ Passionate about **Python development** and **quantitative trading system design
 
 
 - 🔗 GitHub: [ipython168-git](https://github.com/ipython168-git/quant-dev-git)
-- 💼 LinkedIn: [LinkedIn](https://www.linkedin.com/in/ka-on-yip-5775b0429/)
+- 💼 LinkedIn: [LinkedIn](https://www.linkedin.com/in/kaonquant/)
 
 ---
 
