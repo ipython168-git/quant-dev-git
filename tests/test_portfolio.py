@@ -91,7 +91,7 @@ class TestPortfolio:
         pf.backtest()
         report = pf.generate_report()
         
-        assert "Portfolio 績效報告" in report
+        assert "Portfolio Performance Report" in report
         assert "Sharpe Ratio" in report
         assert "AAPL" in report
         assert "TSLA" in report
@@ -142,11 +142,11 @@ class TestPortfolio:
         assert "trade_return" in pf.df.columns
 
     def test_no_empty_strategies(self):
-        with pytest.raises(ValueError, match="strategies 不可為空"):
+        with pytest.raises(ValueError, match="strategies cannot be empty"):
             Portfolio(strategies=[])
 
     def test_weights_mismatch(self, sample_strategies):
-        with pytest.raises(ValueError, match="weights 數量必須與 strategies 數量一致"):
+        with pytest.raises(ValueError, match="weights weights must match number of strategies"):
             Portfolio(
                 strategies=sample_strategies,
                 weights=[0.5],

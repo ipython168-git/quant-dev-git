@@ -112,7 +112,7 @@ class TestAPI:
         response = client.post("/backtest", json=payload)
         assert response.status_code == 400
         data = response.json()
-        assert "不存在" in data["detail"]
+        assert "not found" in data["detail"]
 
     def test_backtest_weights_mismatch(self):
         """測試 POST /backtest（weights 數量唔 match）"""
@@ -128,7 +128,7 @@ class TestAPI:
         response = client.post("/backtest", json=payload)
         assert response.status_code == 400
         data = response.json()
-        assert "數量" in data["detail"] or "mismatch" in data["detail"].lower()
+        assert "does not match" in data["detail"] or "mismatch" in data["detail"].lower()
 
  
     def test_data_download_invalid_ticker(self):
