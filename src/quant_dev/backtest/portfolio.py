@@ -81,15 +81,8 @@ class Portfolio:
                 strat.df = strat.df.reindex(unified_idx)
                 for col in ["Open", "High", "Low", "Close", "Volume"]:
                     if col in strat.df.columns:
-                        strat.df[col] = strat.df[col].ffill()
-
-                # ✅ 如果第一行仲係 NaN，用第一個有效值填
-                for col in ["Open", "High", "Low", "Close"]:
-                    if pd.isna(strat.df[col].iloc[0]):
-                        first_valid = strat.df[col].dropna().iloc[0] if not strat.df[col].dropna().empty else 0.0
-                        strat.df.loc[strat.df.index[0], col] = first_valid
-               
-
+                        strat.df[col] = strat.df[col].ffill() 
+                        strat.df[col] = strat.df[col].bfill()
 
                 strat.df["position"] = strat.df["position"].fillna(0).astype(int)
                 strat.df["entry"] = strat.df["entry"].fillna(np.nan)
