@@ -2,6 +2,7 @@
 # Quant Dev API Server 啟動腳本
 # 用法: ./run.sh [--port PORT] [--host HOST]
 
+
 # 預設值
 PORT=8000
 HOST="0.0.0.0"
@@ -73,8 +74,7 @@ echo "   Port: $PORT"
 echo "   Host: $HOST"
 echo "   Log: nohup.out"
 
-
-nohup python -u -m quant_dev --port "$PORT" --host "$HOST" > nohup.out 2>&1 &
+nohup /home/ipython168_gmail_com/Projects/quant-dev-git/.venv/bin/python -u -m quant_dev --port "$PORT" --host "$HOST" > nohup.out 2>&1 &
 
 # 記錄 PID
 echo $! > quant_dev.pid

@@ -82,6 +82,15 @@ class Portfolio:
                 for col in ["Open", "High", "Low", "Close", "Volume"]:
                     if col in strat.df.columns:
                         strat.df[col] = strat.df[col].ffill()
+
+                # ✅ 如果第一行仲係 NaN，用第一個有效值填
+                for col in ["Open", "High", "Low", "Close"]:
+                    if pd.isna(strat.df[col].iloc[0]):
+                        first_valid = strat.df[col].dropna().iloc[0] if not strat.df[col].dropna().empty else 0.0
+                        strat.df.loc[strat.df.index[0], col] = first_valid
+               
+
+
                 strat.df["position"] = strat.df["position"].fillna(0).astype(int)
                 strat.df["entry"] = strat.df["entry"].fillna(np.nan)
                 strat.df["exit"] = strat.df["exit"].fillna(np.nan)
@@ -113,7 +122,13 @@ class Portfolio:
                 self._arrays[f].append(arr)
                 if f not in ["Close", "High", "Low"]:
                     self.df[f"{f}{i}_{ticker}"] = arr
-            self._open_prices.append(strat.df["Open"].iloc[0])
+
+            # ✅ 搵第一個有效嘅 Open（跳過 NaN）
+            open_series = strat.df["Open"]
+            first_valid_open = open_series.dropna().iloc[0] if not open_series.dropna().empty else 1.0
+            self._open_prices.append(first_valid_open) 
+            #self._open_prices.append(strat.df["Open"].iloc[0])
+
             self._arrays["temp_c"].append(np.zeros(n_rows))
             self._arrays["contract"].append(np.zeros(n_rows))
             self.df[f"temp_c{i}_{ticker}"] = 0

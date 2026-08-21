@@ -19,7 +19,8 @@ dependencies = [
     "pyngrok>=7.0.0",
     "fastapi>=0.100.0",
     "uvicorn>=0.23.0",
-    "nest-asyncio>=1.5.0",    
+    "nest-asyncio>=1.5.0",   
+    "python-dotenv>=1.0.0", 
 ]
 
 # 選擇性依賴 (Optional Dependencies)
